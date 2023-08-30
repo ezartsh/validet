@@ -29,7 +29,7 @@ func (v *Validation) validate(b *ErrorBag) {
 	v.mapSchemaObject(string(jsonString), "", "", v.data, v.schema, &errorBags)
 }
 
-func (v *Validation) mapSchemaObject(jsonString string, pathKey string, key string, data interface{}, schema interface{}, b *ErrorBag) {
+func (v *Validation) mapSchemaObject(jsonString string, pathKey string, key string, data any, schema any, b *ErrorBag) {
 	errorBags := *b
 
 	if pathKey != "" {
@@ -41,40 +41,55 @@ func (v *Validation) mapSchemaObject(jsonString string, pathKey string, key stri
 		schemaData := data.(DataObject)
 		for scKey, scValue := range schemaObject {
 			v.mapSchemaObject(jsonString, pathKey, scKey, schemaData, scValue, &errorBags)
+			if v.options.AbortEarly && len(errorBags.Errors) > 0 {
+				return
+			}
 		}
 	} else {
 		if isSchemaOfObject(schema) {
 			schemaData := data.(DataObject)
 			if scObject, ok := schema.(Object); ok {
-				bags, err := scObject.validate(jsonString, key, schemaData[key])
+				bags, err := scObject.validate(jsonString, key, schemaData[key], v.options)
 				if err != nil {
 					errorBags.append(pathKey+key, bags)
 				} else {
 					schemaDataValue := schemaData[key].(DataObject)
 					for scObjItemKey, scObjItemValue := range scObject.Item {
 						v.mapSchemaObject(jsonString, pathKey+key, scObjItemKey, schemaDataValue, scObjItemValue, &errorBags)
+						if v.options.AbortEarly && len(errorBags.Errors) > 0 {
+							return
+						}
 					}
 				}
 			}
 		} else if isSchemaOfSlice(schema) {
 			if scMap, ok := schema.(Slice); ok {
 				schemaData := data.(DataObject)
-				bags, err := scMap.validate(jsonString, key, schemaData[key])
+				bags, err := scMap.validate(jsonString, key, schemaData[key], v.options)
 				if err != nil {
 					errorBags.append(key, bags)
+					if v.options.AbortEarly {
+						return
+					}
 				}
 			}
 		} else if isSchemaOfSliceObject(schema) {
 			if scSliceObject, ok := schema.(SliceObject); ok {
 				schemaData := data.(DataObject)
-				bags, err := scSliceObject.validate(jsonString, key, schemaData[key])
+				bags, err := scSliceObject.validate(jsonString, key, schemaData[key], v.options)
 				if err != nil {
 					errorBags.append(key, bags)
+					if v.options.AbortEarly {
+						return
+					}
 				} else {
 					schemaDataValues := schemaData[key].([]DataObject)
 					for i, value := range schemaDataValues {
 						for scObjItemKey, scObjItemValue := range scSliceObject.Item {
 							v.mapSchemaObject(jsonString, pathKey+key+"."+strconv.Itoa(i), scObjItemKey, value, scObjItemValue, &errorBags)
+							if v.options.AbortEarly && len(errorBags.Errors) > 0 {
+								return
+							}
 						}
 					}
 				}
@@ -82,10 +97,13 @@ func (v *Validation) mapSchemaObject(jsonString string, pathKey string, key stri
 		} else if isSchemaOfString(schema) {
 			if scMap, ok := schema.(String); ok {
 				schemaData := data.(DataObject)
-				bags, err := scMap.validate(jsonString, key, schemaData[key])
+				bags, err := scMap.validate(jsonString, key, schemaData[key], v.options)
 				pathKey = pathKey + key
 				if err != nil {
 					errorBags.append(pathKey, bags)
+					if v.options.AbortEarly {
+						return
+					}
 				}
 			}
 		}
@@ -106,23 +124,23 @@ func Validate(d DataObject, schema SchemaObject, options Options) {
 	}
 }
 
-func isSchemaOfString(val interface{}) bool {
+func isSchemaOfString(val any) bool {
 	return reflect.TypeOf(val).Kind() == reflect.Struct && reflect.TypeOf(val) == reflect.TypeOf(String{})
 }
 
-func isSchemaOfObject(val interface{}) bool {
+func isSchemaOfObject(val any) bool {
 	return reflect.TypeOf(val).Kind() == reflect.Struct && reflect.TypeOf(val) == reflect.TypeOf(Object{})
 }
 
-func isSchemaOfSlice(val interface{}) bool {
+func isSchemaOfSlice(val any) bool {
 	return reflect.TypeOf(val).Kind() == reflect.Struct && reflect.TypeOf(val) == reflect.TypeOf(Slice{})
 }
 
-func isSchemaOfSliceObject(val interface{}) bool {
+func isSchemaOfSliceObject(val any) bool {
 	return reflect.TypeOf(val).Kind() == reflect.Struct && reflect.TypeOf(val) == reflect.TypeOf(SliceObject{})
 }
 
-func isSchema(val interface{}) bool {
+func isSchema(val any) bool {
 	if value, ok := val.(SchemaObject); ok {
 		return reflect.TypeOf(value) == reflect.TypeOf(SchemaObject{})
 	}

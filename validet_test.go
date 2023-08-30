@@ -6,8 +6,10 @@ import (
 
 func TestValidate(t *testing.T) {
 	data := DataObject{
-		"name":        "Ezra",
+		"name":        "tono",
+		"email":       "",
 		"description": "",
+		"url":         "http://www.ada.com",
 		"information": DataObject{
 			"age":         "30",
 			"description": "ada",
@@ -15,13 +17,18 @@ func TestValidate(t *testing.T) {
 				"level": "",
 			},
 		},
-		"tags": []interface{}{"1"},
+		"tags": []any{"1"},
 		"items": []DataObject{
 			{"title": "ada"},
 		},
 	}
 	schema := SchemaObject{
 		"name": String{Required: true, Max: 10, Message: StringErrorMessage{Required: "name dibutuhkan"}},
+		"email": String{RequiredUnless: &RequiredUnless{
+			FieldPath: "name",
+			Value:     "tono",
+		}, Email: true},
+		"url": String{Required: true, Url: &Url{Https: true}},
 		"description": String{
 			RequiredIf: &RequiredIf{
 				FieldPath: "name",

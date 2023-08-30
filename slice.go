@@ -16,13 +16,13 @@ type Slice struct {
 	Message   SliceErrorMessage
 }
 
-func (s *Slice) validate(jsonSource string, key string, value interface{}) ([]string, error) {
+func (s *Slice) validate(jsonSource string, key string, value any, option Options) ([]string, error) {
 	var bags []string
 	if value == nil {
 		bags = append(bags, fmt.Sprintf("%s is required", key))
 		return bags, errors.New("validation failed")
 	}
-	values := value.([]interface{})
+	values := value.([]any)
 	if s.Required {
 		if len(values) == 0 {
 			bags = append(bags, fmt.Sprintf("%s is required", key))
@@ -30,7 +30,9 @@ func (s *Slice) validate(jsonSource string, key string, value interface{}) ([]st
 		}
 	}
 
-	s.assertType(key, values, &bags)
+	if err := s.assertType(key, values, &bags); option.AbortEarly && err != nil {
+		return bags, err
+	}
 
 	if len(bags) > 0 {
 		return bags, errors.New("validation failed")
@@ -40,7 +42,7 @@ func (s *Slice) validate(jsonSource string, key string, value interface{}) ([]st
 
 }
 
-func (s *Slice) assertType(key string, values []interface{}, bags *[]string) error {
+func (s *Slice) assertType(key string, values []any, bags *[]string) error {
 	failed := false
 
 	if s.ValueType != "" {

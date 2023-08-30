@@ -11,17 +11,17 @@ type ObjectErrorMessage struct {
 
 type Object struct {
 	Required bool
-	Item     map[string]interface{}
+	Item     map[string]any
 	Message  ObjectErrorMessage
 }
 
-func (s *Object) validate(jsonSource string, key string, value interface{}) ([]string, error) {
+func (s *Object) validate(jsonSource string, key string, value any, option Options) ([]string, error) {
 	var bags []string
 	if value == nil {
 		bags = append(bags, fmt.Sprintf("%s is required", key))
 		return bags, errors.New("validation failed")
 	}
-	stringValue := value.(map[string]interface{})
+	stringValue := value.(map[string]any)
 	if s.Required {
 		if len(stringValue) == 0 {
 			bags = append(bags, fmt.Sprintf("%s is required", key))

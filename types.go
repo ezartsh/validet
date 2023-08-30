@@ -1,12 +1,17 @@
 package validet
 
-type DataObject = map[string]interface{}
+type DataObject = map[string]any
 
-type SchemaObject = map[string]interface{}
+type SchemaObject = map[string]any
 
 type SchemaSliceObject = []SchemaObject
 
 type RequiredIf struct {
+	FieldPath string
+	Value     any
+}
+
+type RequiredUnless struct {
 	FieldPath string
 	Value     any
 }
