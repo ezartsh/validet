@@ -17,7 +17,7 @@ func TestValidate(t *testing.T) {
 				"level": "",
 			},
 		},
-		"tags": []any{"sts"},
+		"tags": []any{1, 2},
 		"items": []DataObject{
 			{"title": "ada"},
 		},
@@ -52,7 +52,7 @@ func TestValidate(t *testing.T) {
 				},
 			},
 		},
-		"tags": Slice[Int]{Required: true},
+		"tags": Slice[Int]{Required: true, Min: 2},
 		"items": SliceObject{
 			Required: true,
 			Item: SchemaObject{

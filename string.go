@@ -176,8 +176,8 @@ func (s *String) assertRequired(key string, value any, bags *[]string) error {
 
 func (s *String) assertRequiredIf(jsonSource string, key string, value any, bags *[]string) error {
 	if s.RequiredIf != nil && (value == nil || (isStringValue(value) && stringLength(value) == 0)) {
-		value := gjson.Get(jsonSource, s.RequiredIf.FieldPath)
-		if value.String() == s.RequiredIf.Value {
+		comparedValue := gjson.Get(jsonSource, s.RequiredIf.FieldPath)
+		if comparedValue.String() == s.RequiredIf.Value {
 			appendErrorBags(
 				bags,
 				fmt.Sprintf("%s is required", key),
@@ -191,8 +191,8 @@ func (s *String) assertRequiredIf(jsonSource string, key string, value any, bags
 
 func (s *String) assertRequiredUnless(jsonSource string, key string, value any, bags *[]string) error {
 	if s.RequiredUnless != nil && (value == nil || (isStringValue(value) && stringLength(value) == 0)) {
-		value := gjson.Get(jsonSource, s.RequiredUnless.FieldPath)
-		if value.String() != s.RequiredUnless.Value {
+		comparedValue := gjson.Get(jsonSource, s.RequiredUnless.FieldPath)
+		if comparedValue.String() != s.RequiredUnless.Value {
 			appendErrorBags(
 				bags,
 				fmt.Sprintf("%s is required", key),
