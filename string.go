@@ -151,15 +151,15 @@ func (s *String) assertType(key string, value any, bags *[]string) (string, erro
 }
 
 func (s *String) assertRequired(key string, value any, bags *[]string) error {
-	if value == nil {
-		appendErrorBags(
-			bags,
-			fmt.Sprintf("%s is required", key),
-			s.Message.Required,
-		)
-		return StringValidationError
-	}
 	if s.Required {
+		if value == nil {
+			appendErrorBags(
+				bags,
+				fmt.Sprintf("%s is required", key),
+				s.Message.Required,
+			)
+			return StringValidationError
+		}
 		if isStringValue(value) {
 			if stringLength(value) == 0 {
 				appendErrorBags(
@@ -196,7 +196,7 @@ func (s *String) assertRequiredUnless(jsonSource string, key string, value any, 
 			appendErrorBags(
 				bags,
 				fmt.Sprintf("%s is required", key),
-				s.Message.RequiredIf,
+				s.Message.RequiredUnless,
 			)
 			return StringValidationError
 		}
@@ -267,11 +267,11 @@ func (s *String) assertIn(key string, value string, bags *[]string) error {
 }
 
 func (s *String) assertNotIn(key string, value string, bags *[]string) error {
-	if len(s.In) > 0 && stringLength(value) > 0 && slices.Contains(s.In, value) {
+	if len(s.NotIn) > 0 && stringLength(value) > 0 && slices.Contains(s.NotIn, value) {
 		appendErrorBags(
 			bags,
-			fmt.Sprintf("%s must not in %s", key, strings.Join(s.In, ", ")),
-			s.Message.In,
+			fmt.Sprintf("%s must not in %s", key, strings.Join(s.NotIn, ", ")),
+			s.Message.NotIn,
 		)
 		return StringValidationError
 	}
@@ -372,13 +372,4 @@ func stringLength(value any) int {
 	}
 	stringValue := value.(string)
 	return len([]rune(stringValue))
-}
-
-func appendErrorBags(bags *[]string, om string, cm string) {
-	errorBags := *bags
-	message := om
-	if cm != "" {
-		message = cm
-	}
-	*bags = append(errorBags, message)
 }

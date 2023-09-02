@@ -1,5 +1,7 @@
 package validet
 
+type Int = int
+
 type DataObject = map[string]any
 
 type SchemaObject = map[string]any

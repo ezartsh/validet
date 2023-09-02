@@ -63,14 +63,40 @@ func (v *Validation) mapSchemaObject(jsonString string, pathKey string, key stri
 				}
 			}
 		} else if isSchemaOfSlice(schema) {
-			if scMap, ok := schema.(Slice); ok {
-				schemaData := data.(DataObject)
-				bags, err := scMap.validate(jsonString, key, schemaData[key], v.options)
-				if err != nil {
-					errorBags.append(key, bags)
-					if v.options.AbortEarly {
-						return
-					}
+			schemaData := data.(DataObject)
+			var err error
+			var bags []string
+
+			switch reflect.TypeOf(schema) {
+			case reflect.TypeOf(Slice[string]{}):
+				if scMap, ok := schema.(Slice[string]); ok {
+					bags, err = scMap.validate(jsonString, key, schemaData[key], v.options)
+				}
+			case reflect.TypeOf(Slice[int]{}):
+				if scMap, ok := schema.(Slice[int]); ok {
+					bags, err = scMap.validate(jsonString, key, schemaData[key], v.options)
+				}
+			case reflect.TypeOf(Slice[int32]{}):
+				if scMap, ok := schema.(Slice[int32]); ok {
+					bags, err = scMap.validate(jsonString, key, schemaData[key], v.options)
+				}
+			case reflect.TypeOf(Slice[int64]{}):
+				if scMap, ok := schema.(Slice[int64]); ok {
+					bags, err = scMap.validate(jsonString, key, schemaData[key], v.options)
+				}
+			case reflect.TypeOf(Slice[float32]{}):
+				if scMap, ok := schema.(Slice[float32]); ok {
+					bags, err = scMap.validate(jsonString, key, schemaData[key], v.options)
+				}
+			case reflect.TypeOf(Slice[float64]{}):
+				if scMap, ok := schema.(Slice[float64]); ok {
+					bags, err = scMap.validate(jsonString, key, schemaData[key], v.options)
+				}
+			}
+			if err != nil {
+				errorBags.append(key, bags)
+				if v.options.AbortEarly {
+					return
 				}
 			}
 		} else if isSchemaOfSliceObject(schema) {
@@ -106,6 +132,40 @@ func (v *Validation) mapSchemaObject(jsonString string, pathKey string, key stri
 					}
 				}
 			}
+		} else if isSchemaOfNumeric(schema) {
+			schemaData := data.(DataObject)
+			var err error
+			var bags []string
+
+			switch reflect.TypeOf(schema) {
+			case reflect.TypeOf(Numeric[int]{}):
+				if scMap, ok := schema.(Numeric[int]); ok {
+					bags, err = scMap.validate(jsonString, key, schemaData[key], v.options)
+				}
+			case reflect.TypeOf(Numeric[int32]{}):
+				if scMap, ok := schema.(Numeric[int32]); ok {
+					bags, err = scMap.validate(jsonString, key, schemaData[key], v.options)
+				}
+			case reflect.TypeOf(Numeric[int64]{}):
+				if scMap, ok := schema.(Numeric[int64]); ok {
+					bags, err = scMap.validate(jsonString, key, schemaData[key], v.options)
+				}
+			case reflect.TypeOf(Numeric[float32]{}):
+				if scMap, ok := schema.(Numeric[float32]); ok {
+					bags, err = scMap.validate(jsonString, key, schemaData[key], v.options)
+				}
+			case reflect.TypeOf(Numeric[float64]{}):
+				if scMap, ok := schema.(Numeric[float64]); ok {
+					bags, err = scMap.validate(jsonString, key, schemaData[key], v.options)
+				}
+			}
+			pathKey = pathKey + key
+			if err != nil {
+				errorBags.append(pathKey, bags)
+				if v.options.AbortEarly {
+					return
+				}
+			}
 		}
 	}
 }
@@ -128,12 +188,25 @@ func isSchemaOfString(val any) bool {
 	return reflect.TypeOf(val).Kind() == reflect.Struct && reflect.TypeOf(val) == reflect.TypeOf(String{})
 }
 
+func isSchemaOfNumeric(val any) bool {
+	return reflect.TypeOf(val).Kind() == reflect.Struct && (reflect.TypeOf(val) == reflect.TypeOf(Numeric[int]{}) ||
+		reflect.TypeOf(val) == reflect.TypeOf(Numeric[int32]{}) ||
+		reflect.TypeOf(val) == reflect.TypeOf(Numeric[int64]{}) ||
+		reflect.TypeOf(val) == reflect.TypeOf(Numeric[float32]{}) ||
+		reflect.TypeOf(val) == reflect.TypeOf(Numeric[float64]{}))
+}
+
 func isSchemaOfObject(val any) bool {
 	return reflect.TypeOf(val).Kind() == reflect.Struct && reflect.TypeOf(val) == reflect.TypeOf(Object{})
 }
 
 func isSchemaOfSlice(val any) bool {
-	return reflect.TypeOf(val).Kind() == reflect.Struct && reflect.TypeOf(val) == reflect.TypeOf(Slice{})
+	return reflect.TypeOf(val).Kind() == reflect.Struct && (reflect.TypeOf(val) == reflect.TypeOf(Slice[int]{}) ||
+		reflect.TypeOf(val) == reflect.TypeOf(Slice[int32]{}) ||
+		reflect.TypeOf(val) == reflect.TypeOf(Slice[int64]{}) ||
+		reflect.TypeOf(val) == reflect.TypeOf(Slice[float32]{}) ||
+		reflect.TypeOf(val) == reflect.TypeOf(Slice[float64]{}) ||
+		reflect.TypeOf(val) == reflect.TypeOf(Slice[string]{}))
 }
 
 func isSchemaOfSliceObject(val any) bool {

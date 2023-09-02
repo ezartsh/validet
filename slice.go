@@ -3,20 +3,23 @@ package validet
 import (
 	"errors"
 	"fmt"
-	"reflect"
 )
 
 type SliceErrorMessage struct {
 	Required string
 }
 
-type Slice struct {
+type SliceValueType interface {
+	int | int32 | int64 | float32 | float64 | string
+}
+
+type Slice[T SliceValueType] struct {
 	Required  bool
-	ValueType string
+	ValueType T
 	Message   SliceErrorMessage
 }
 
-func (s *Slice) validate(jsonSource string, key string, value any, option Options) ([]string, error) {
+func (s *Slice[T]) validate(jsonSource string, key string, value any, option Options) ([]string, error) {
 	var bags []string
 	if value == nil {
 		bags = append(bags, fmt.Sprintf("%s is required", key))
@@ -42,28 +45,19 @@ func (s *Slice) validate(jsonSource string, key string, value any, option Option
 
 }
 
-func (s *Slice) assertType(key string, values []any, bags *[]string) error {
+func (s *Slice[T]) assertType(key string, values []any, bags *[]string) error {
 	failed := false
 
-	if s.ValueType != "" {
-		for _, value := range values {
-			if s.ValueType == "int" {
-				if reflect.TypeOf(value) != reflect.TypeOf(1) {
-					failed = true
-					break
-				}
-			} else if s.ValueType == "string" {
-				if reflect.TypeOf(value) != reflect.TypeOf("") {
-					failed = true
-					break
-				}
-			}
+	for _, value := range values {
+		if _, ok := value.(T); !ok {
+			failed = true
+			break
 		}
 	}
 	if failed {
 		appendErrorBags(
 			bags,
-			fmt.Sprintf("%s must be type of %s", key, s.ValueType),
+			fmt.Sprintf("%s must be type of %T", key, *new(T)),
 			"",
 		)
 		return StringValidationError

@@ -11,13 +11,13 @@ func TestValidate(t *testing.T) {
 		"description": "",
 		"url":         "http://www.ada.com",
 		"information": DataObject{
-			"age":         "30",
+			"age":         1.2,
 			"description": "ada",
 			"job": DataObject{
 				"level": "",
 			},
 		},
-		"tags": []any{"1"},
+		"tags": []any{"sts"},
 		"items": []DataObject{
 			{"title": "ada"},
 		},
@@ -38,7 +38,10 @@ func TestValidate(t *testing.T) {
 		"information": Object{
 			Required: true,
 			Item: SchemaObject{
-				"age":         String{Required: true, Max: 10},
+				"age": Numeric[float64]{RequiredIf: &RequiredIf{
+					FieldPath: "name",
+					Value:     "tono",
+				}},
 				"description": String{Required: true, Max: 10, Regex: "p([a-z]+)ch"},
 				"job": Object{
 					Required: true,
@@ -49,10 +52,7 @@ func TestValidate(t *testing.T) {
 				},
 			},
 		},
-		"tags": Slice{
-			Required:  true,
-			ValueType: "int",
-		},
+		"tags": Slice[Int]{Required: true},
 		"items": SliceObject{
 			Required: true,
 			Item: SchemaObject{
