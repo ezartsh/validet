@@ -11,7 +11,7 @@ func TestValidate(t *testing.T) {
 		"description": "",
 		"url":         "http://www.ada.com",
 		"information": DataObject{
-			"age":         1.2,
+			"age":         1.2432,
 			"description": "ada",
 			"job": DataObject{
 				"level": "",
@@ -41,7 +41,7 @@ func TestValidate(t *testing.T) {
 				"age": Numeric[float64]{RequiredIf: &RequiredIf{
 					FieldPath: "name",
 					Value:     "tono",
-				}},
+				}, MinDigits: 5},
 				"description": String{Required: true, Max: 10, Regex: "p([a-z]+)ch"},
 				"job": Object{
 					Required: true,

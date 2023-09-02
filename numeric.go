@@ -79,6 +79,14 @@ func (s *Numeric[NT]) validate(jsonSource string, key string, value any, option 
 			return bags, err
 		}
 
+		if err := s.assertMinDigits(key, parsedValue, &bags); option.AbortEarly && err != nil {
+			return bags, err
+		}
+
+		if err := s.assertMaxDigits(key, parsedValue, &bags); option.AbortEarly && err != nil {
+			return bags, err
+		}
+
 		if err := s.assertRegex(key, parsedValue, &bags); option.AbortEarly && err != nil {
 			return bags, err
 		}
@@ -228,6 +236,30 @@ func (s *Numeric[NT]) assertMax(key string, value NT, bags *[]string) error {
 	return nil
 }
 
+func (s *Numeric[NT]) assertMinDigits(key string, value NT, bags *[]string) error {
+	if s.MinDigits > 0 && NT(digitLength(value)) < NT(s.MinDigits) {
+		appendErrorBags(
+			bags,
+			fmt.Sprintf("%s total digits must be minimum of %d", key, s.MinDigits),
+			s.Message.MinDigits,
+		)
+		return NumericValidationError
+	}
+	return nil
+}
+
+func (s *Numeric[NT]) assertMaxDigits(key string, value NT, bags *[]string) error {
+	if s.MaxDigits > 0 && NT(digitLength(value)) > NT(s.MaxDigits) {
+		appendErrorBags(
+			bags,
+			fmt.Sprintf("%s total digits must be maximum of %d", key, s.MaxDigits),
+			s.Message.MaxDigits,
+		)
+		return NumericValidationError
+	}
+	return nil
+}
+
 func (s *Numeric[NT]) assertRegex(key string, value NT, bags *[]string) error {
 	regx, err := regexp.Compile(s.Regex)
 	if s.Regex != "" && (err != nil || !regx.MatchString(numericToString(value))) {
@@ -320,6 +352,5 @@ func numericToString[N NumericValue](value N) (stringValue string) {
 
 func digitLength[N NumericValue](value N) int {
 	var stringValue = numericToString(value)
-
-	return len([]rune(stringValue))
+	return len([]rune(strings.Replace(stringValue, ".", "", -1)))
 }
