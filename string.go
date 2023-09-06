@@ -1,10 +1,8 @@
 package validet
 
 import (
-	"errors"
 	"fmt"
 	"github.com/tidwall/gjson"
-	"reflect"
 	"regexp"
 	"slices"
 	"strings"
@@ -53,8 +51,6 @@ const (
 	urlHttp  string = "http"
 	urlHttps        = "https"
 )
-
-var StringValidationError = errors.New("string validation failed")
 
 func (s *String) validate(jsonSource string, key string, value any, option Options) ([]string, error) {
 	var bags []string
@@ -208,7 +204,7 @@ func (s *String) assertMin(key string, value string, bags *[]string) error {
 	if s.Min > 0 && stringLength(value) < s.Min {
 		appendErrorBags(
 			bags,
-			fmt.Sprintf("%s must be minimum of %d", key, s.Min),
+			fmt.Sprintf("%s must be minimum of %d character(s)", key, s.Min),
 			s.Message.Min,
 		)
 		return StringValidationError
@@ -220,7 +216,7 @@ func (s *String) assertMax(key string, value string, bags *[]string) error {
 	if s.Max > 0 && stringLength(value) > s.Max {
 		appendErrorBags(
 			bags,
-			fmt.Sprintf("%s must be maximum of %d", key, s.Max),
+			fmt.Sprintf("%s must be maximum of %d character(s)", key, s.Max),
 			s.Message.Max,
 		)
 		return StringValidationError
@@ -360,16 +356,4 @@ func (s *String) assertCustomValidation(fc func(v string) error, value any, bags
 		return StringValidationError
 	}
 	return nil
-}
-
-func isStringValue(value any) bool {
-	return reflect.TypeOf(value) == reflect.TypeOf("")
-}
-
-func stringLength(value any) int {
-	if value == nil {
-		return 0
-	}
-	stringValue := value.(string)
-	return len([]rune(stringValue))
 }
