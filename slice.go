@@ -3,6 +3,8 @@ package validet
 import (
 	"errors"
 	"fmt"
+	"reflect"
+
 	"github.com/tidwall/gjson"
 )
 
@@ -15,7 +17,7 @@ type SliceErrorMessage struct {
 }
 
 type SliceValueType interface {
-	int | int32 | int64 | float32 | float64 | string
+	int | int32 | int64 | uint | uint32 | uint64 | float32 | float64 | string
 }
 
 type Slice[T SliceValueType] struct {
@@ -28,9 +30,78 @@ type Slice[T SliceValueType] struct {
 	Message        SliceErrorMessage
 }
 
-var SliceValidationError = errors.New("slice validation failed")
+func (s Slice[T]) isMyTypeOf(schema any) bool {
+	return reflect.TypeOf(schema).Kind() == reflect.Struct && (reflect.TypeOf(schema) == reflect.TypeOf(Slice[int]{}) ||
+		reflect.TypeOf(schema) == reflect.TypeOf(Slice[int32]{}) ||
+		reflect.TypeOf(schema) == reflect.TypeOf(Slice[int64]{}) ||
+		reflect.TypeOf(schema) == reflect.TypeOf(Slice[uint]{}) ||
+		reflect.TypeOf(schema) == reflect.TypeOf(Slice[uint32]{}) ||
+		reflect.TypeOf(schema) == reflect.TypeOf(Slice[uint64]{}) ||
+		reflect.TypeOf(schema) == reflect.TypeOf(Slice[float32]{}) ||
+		reflect.TypeOf(schema) == reflect.TypeOf(Slice[float64]{}) ||
+		reflect.TypeOf(schema) == reflect.TypeOf(Slice[string]{}))
+}
 
-func (s *Slice[T]) validate(jsonSource string, key string, value any, option Options) ([]string, error) {
+func (s Slice[T]) process(params RuleParams) error {
+	schemaData := params.DataKey.(DataObject)
+	var err error
+	var bags []string
+
+	schema := params.Schema
+	originalData := params.OriginalData
+	key := params.Key
+	options := params.Option
+
+	switch reflect.TypeOf(schema) {
+	case reflect.TypeOf(Slice[string]{}):
+		if scMap, ok := schema.(Slice[string]); ok {
+			bags, err = scMap.validate(originalData, key, schemaData[key], options)
+		}
+	case reflect.TypeOf(Slice[int]{}):
+		if scMap, ok := schema.(Slice[int]); ok {
+			bags, err = scMap.validate(originalData, key, schemaData[key], options)
+		}
+	case reflect.TypeOf(Slice[int32]{}):
+		if scMap, ok := schema.(Slice[int32]); ok {
+			bags, err = scMap.validate(originalData, key, schemaData[key], options)
+		}
+	case reflect.TypeOf(Slice[int64]{}):
+		if scMap, ok := schema.(Slice[int64]); ok {
+			bags, err = scMap.validate(originalData, key, schemaData[key], options)
+		}
+	case reflect.TypeOf(Slice[uint]{}):
+		if scMap, ok := schema.(Slice[uint]); ok {
+			bags, err = scMap.validate(originalData, key, schemaData[key], options)
+		}
+	case reflect.TypeOf(Slice[uint32]{}):
+		if scMap, ok := schema.(Slice[uint32]); ok {
+			bags, err = scMap.validate(originalData, key, schemaData[key], options)
+		}
+	case reflect.TypeOf(Slice[uint64]{}):
+		if scMap, ok := schema.(Slice[uint64]); ok {
+			bags, err = scMap.validate(originalData, key, schemaData[key], options)
+		}
+	case reflect.TypeOf(Slice[float32]{}):
+		if scMap, ok := schema.(Slice[float32]); ok {
+			bags, err = scMap.validate(originalData, key, schemaData[key], options)
+		}
+	case reflect.TypeOf(Slice[float64]{}):
+		if scMap, ok := schema.(Slice[float64]); ok {
+			bags, err = scMap.validate(originalData, key, schemaData[key], options)
+		}
+	}
+
+	pathKey := params.PathKey + key
+	if err != nil {
+		params.ErrorBags.append(pathKey, bags)
+		if options.AbortEarly {
+			return errors.New("error")
+		}
+	}
+	return nil
+}
+
+func (s Slice[T]) validate(jsonSource []byte, key string, value any, option Options) ([]string, error) {
 	var bags []string
 
 	err := s.assertRequired(key, value, &bags)
@@ -76,7 +147,7 @@ func (s *Slice[T]) validate(jsonSource string, key string, value any, option Opt
 
 }
 
-func (s *Slice[T]) assertRequired(key string, value any, bags *[]string) error {
+func (s Slice[T]) assertRequired(key string, value any, bags *[]string) error {
 	if s.Required {
 		if value == nil {
 			appendErrorBags(
@@ -86,11 +157,19 @@ func (s *Slice[T]) assertRequired(key string, value any, bags *[]string) error {
 			)
 			return SliceValidationError
 		}
-		values := value.([]any)
-		if len(values) == 0 {
+		if values, ok := value.([]any); ok {
+			if len(values) == 0 {
+				appendErrorBags(
+					bags,
+					fmt.Sprintf("%s is required", key),
+					s.Message.Required,
+				)
+				return SliceValidationError
+			}
+		} else {
 			appendErrorBags(
 				bags,
-				fmt.Sprintf("%s is required", key),
+				fmt.Sprintf("%s must be slice of type %T", key, *new(T)),
 				s.Message.Required,
 			)
 			return SliceValidationError
@@ -99,7 +178,7 @@ func (s *Slice[T]) assertRequired(key string, value any, bags *[]string) error {
 	return nil
 }
 
-func (s *Slice[T]) assertType(key string, values []any, bags *[]string) ([]T, error) {
+func (s Slice[T]) assertType(key string, values []any, bags *[]string) ([]T, error) {
 	failed := false
 	var parsedValues []T
 	for _, value := range values {
@@ -121,10 +200,10 @@ func (s *Slice[T]) assertType(key string, values []any, bags *[]string) ([]T, er
 	return parsedValues, nil
 }
 
-func (s *Slice[T]) assertRequiredIf(jsonSource string, key string, value any, bags *[]string) error {
+func (s Slice[T]) assertRequiredIf(jsonSource []byte, key string, value any, bags *[]string) error {
 	values := value.([]any)
 	if s.RequiredIf != nil && (value == nil || len(values) == 0) {
-		comparedValue := gjson.Get(jsonSource, s.RequiredIf.FieldPath)
+		comparedValue := gjson.GetBytes(jsonSource, s.RequiredIf.FieldPath)
 		if comparedValue.String() == s.RequiredIf.Value {
 			appendErrorBags(
 				bags,
@@ -137,10 +216,10 @@ func (s *Slice[T]) assertRequiredIf(jsonSource string, key string, value any, ba
 	return nil
 }
 
-func (s *Slice[T]) assertRequiredUnless(jsonSource string, key string, value any, bags *[]string) error {
+func (s Slice[T]) assertRequiredUnless(jsonSource []byte, key string, value any, bags *[]string) error {
 	values := value.([]any)
 	if s.RequiredUnless != nil && (value == nil || len(values) == 0) {
-		comparedValue := gjson.Get(jsonSource, s.RequiredUnless.FieldPath)
+		comparedValue := gjson.GetBytes(jsonSource, s.RequiredUnless.FieldPath)
 		if comparedValue.String() != s.RequiredUnless.Value {
 			appendErrorBags(
 				bags,
@@ -153,7 +232,7 @@ func (s *Slice[T]) assertRequiredUnless(jsonSource string, key string, value any
 	return nil
 }
 
-func (s *Slice[T]) assertMin(key string, values []T, bags *[]string) error {
+func (s Slice[T]) assertMin(key string, values []T, bags *[]string) error {
 	if s.Min > 0 && len(values) < s.Min {
 		appendErrorBags(
 			bags,
@@ -165,7 +244,7 @@ func (s *Slice[T]) assertMin(key string, values []T, bags *[]string) error {
 	return nil
 }
 
-func (s *Slice[T]) assertMax(key string, values []T, bags *[]string) error {
+func (s Slice[T]) assertMax(key string, values []T, bags *[]string) error {
 	if s.Max > 0 && len(values) > s.Max {
 		appendErrorBags(
 			bags,

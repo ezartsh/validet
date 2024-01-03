@@ -3,6 +3,9 @@ package validet
 import (
 	"errors"
 	"fmt"
+	"reflect"
+	"strconv"
+
 	"github.com/tidwall/gjson"
 )
 
@@ -24,9 +27,52 @@ type SliceObject struct {
 	Message        SliceObjectErrorMessage
 }
 
-var SliceObjectValidationError = errors.New("slice object validation failed")
+func (s SliceObject) isMyTypeOf(schema any) bool {
+	return reflect.TypeOf(schema).Kind() == reflect.Struct && reflect.TypeOf(schema) == reflect.TypeOf(SliceObject{})
+}
 
-func (s *SliceObject) validate(jsonSource string, key string, value any, option Options) ([]string, error) {
+func (s SliceObject) process(params RuleParams) error {
+	schemaData := params.DataKey.(DataObject)
+	var err error
+	var bags []string
+
+	errorBags := *params.ErrorBags
+	schema := params.Schema
+	originalData := params.OriginalData
+	key := params.Key
+	options := params.Option
+
+	if scSliceObject, ok := schema.(SliceObject); ok {
+		bags, err := scSliceObject.validate(originalData, key, schemaData[key], options)
+		if err != nil {
+			errorBags.append(params.PathKey+key, bags)
+			if options.AbortEarly {
+				return errors.New("new error")
+			}
+		} else {
+			schemaDataValues := schemaData[key].([]DataObject)
+			for i, value := range schemaDataValues {
+				for scObjItemKey, scObjItemValue := range scSliceObject.Item {
+					mapSchemas(originalData, params.PathKey+key+"."+strconv.Itoa(i), scObjItemKey, value, scObjItemValue, &errorBags, options)
+					if options.AbortEarly && len(errorBags.Errors) > 0 {
+						return errors.New("new error")
+					}
+				}
+			}
+		}
+	}
+
+	pathKey := params.PathKey + key
+	if err != nil {
+		params.ErrorBags.append(pathKey, bags)
+		if options.AbortEarly {
+			return errors.New("error")
+		}
+	}
+	return nil
+}
+
+func (s SliceObject) validate(jsonSource []byte, key string, value any, option Options) ([]string, error) {
 	var bags []string
 
 	err := s.assertRequired(key, value, &bags)
@@ -67,7 +113,7 @@ func (s *SliceObject) validate(jsonSource string, key string, value any, option 
 
 }
 
-func (s *SliceObject) assertRequired(key string, value any, bags *[]string) error {
+func (s SliceObject) assertRequired(key string, value any, bags *[]string) error {
 	if s.Required {
 		if value == nil {
 			appendErrorBags(
@@ -93,7 +139,7 @@ func (s *SliceObject) assertRequired(key string, value any, bags *[]string) erro
 	return nil
 }
 
-func (s *SliceObject) assertType(key string, value any, bags *[]string) ([]DataObject, error) {
+func (s SliceObject) assertType(key string, value any, bags *[]string) ([]DataObject, error) {
 	if values, ok := value.([]DataObject); ok {
 		return values, nil
 	}
@@ -105,10 +151,10 @@ func (s *SliceObject) assertType(key string, value any, bags *[]string) ([]DataO
 	return []DataObject{}, SliceObjectValidationError
 }
 
-func (s *SliceObject) assertRequiredIf(jsonSource string, key string, value any, bags *[]string) error {
+func (s SliceObject) assertRequiredIf(jsonSource []byte, key string, value any, bags *[]string) error {
 	values := value.([]DataObject)
 	if s.RequiredIf != nil && (value == nil || len(values) == 0) {
-		comparedValue := gjson.Get(jsonSource, s.RequiredIf.FieldPath)
+		comparedValue := gjson.GetBytes(jsonSource, s.RequiredIf.FieldPath)
 		if comparedValue.String() == s.RequiredIf.Value {
 			appendErrorBags(
 				bags,
@@ -121,10 +167,10 @@ func (s *SliceObject) assertRequiredIf(jsonSource string, key string, value any,
 	return nil
 }
 
-func (s *SliceObject) assertRequiredUnless(jsonSource string, key string, value any, bags *[]string) error {
+func (s SliceObject) assertRequiredUnless(jsonSource []byte, key string, value any, bags *[]string) error {
 	values := value.([]DataObject)
 	if s.RequiredUnless != nil && (value == nil || len(values) == 0) {
-		comparedValue := gjson.Get(jsonSource, s.RequiredUnless.FieldPath)
+		comparedValue := gjson.GetBytes(jsonSource, s.RequiredUnless.FieldPath)
 		if comparedValue.String() != s.RequiredUnless.Value {
 			appendErrorBags(
 				bags,
@@ -137,7 +183,7 @@ func (s *SliceObject) assertRequiredUnless(jsonSource string, key string, value 
 	return nil
 }
 
-func (s *SliceObject) assertMin(key string, values []DataObject, bags *[]string) error {
+func (s SliceObject) assertMin(key string, values []DataObject, bags *[]string) error {
 	if s.Min > 0 && len(values) < s.Min {
 		appendErrorBags(
 			bags,
@@ -149,7 +195,7 @@ func (s *SliceObject) assertMin(key string, values []DataObject, bags *[]string)
 	return nil
 }
 
-func (s *SliceObject) assertMax(key string, values []DataObject, bags *[]string) error {
+func (s SliceObject) assertMax(key string, values []DataObject, bags *[]string) error {
 	if s.Max > 0 && len(values) > s.Max {
 		appendErrorBags(
 			bags,

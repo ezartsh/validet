@@ -3,12 +3,13 @@ package validet
 import (
 	"errors"
 	"fmt"
-	"github.com/tidwall/gjson"
 	"reflect"
 	"regexp"
 	"slices"
 	"strconv"
 	"strings"
+
+	"github.com/tidwall/gjson"
 )
 
 type NumericErrorMessage struct {
@@ -26,7 +27,7 @@ type NumericErrorMessage struct {
 }
 
 type NumericValue interface {
-	int | int32 | int64 | float32 | float64
+	int | int32 | int64 | uint | uint32 | uint64 | float32 | float64
 }
 
 type Numeric[NT NumericValue] struct {
@@ -45,9 +46,73 @@ type Numeric[NT NumericValue] struct {
 	Message        NumericErrorMessage
 }
 
-var NumericValidationError = errors.New("numeric validation failed")
+func (s Numeric[NT]) isMyTypeOf(schema any) bool {
+	return reflect.TypeOf(schema).Kind() == reflect.Struct &&
+		(reflect.TypeOf(schema) == reflect.TypeOf(Numeric[int]{}) ||
+			reflect.TypeOf(schema) == reflect.TypeOf(Numeric[int32]{}) ||
+			reflect.TypeOf(schema) == reflect.TypeOf(Numeric[int64]{}) ||
+			reflect.TypeOf(schema) == reflect.TypeOf(Numeric[uint]{}) ||
+			reflect.TypeOf(schema) == reflect.TypeOf(Numeric[uint32]{}) ||
+			reflect.TypeOf(schema) == reflect.TypeOf(Numeric[uint64]{}) ||
+			reflect.TypeOf(schema) == reflect.TypeOf(Numeric[float32]{}) ||
+			reflect.TypeOf(schema) == reflect.TypeOf(Numeric[float64]{}))
+}
 
-func (s *Numeric[NT]) validate(jsonSource string, key string, value any, option Options) ([]string, error) {
+func (s Numeric[NT]) process(params RuleParams) error {
+	schemaData := params.DataKey.(DataObject)
+	var err error
+	var bags []string
+
+	schema := params.Schema
+	originalData := params.OriginalData
+	key := params.Key
+	options := params.Option
+
+	switch reflect.TypeOf(schema) {
+	case reflect.TypeOf(Numeric[int]{}):
+		if scMap, ok := schema.(Numeric[int]); ok {
+			bags, err = scMap.validate(originalData, key, schemaData[key], options)
+		}
+	case reflect.TypeOf(Numeric[int32]{}):
+		if scMap, ok := schema.(Numeric[int32]); ok {
+			bags, err = scMap.validate(originalData, key, schemaData[key], options)
+		}
+	case reflect.TypeOf(Numeric[int64]{}):
+		if scMap, ok := schema.(Numeric[int64]); ok {
+			bags, err = scMap.validate(originalData, key, schemaData[key], options)
+		}
+	case reflect.TypeOf(Numeric[uint]{}):
+		if scMap, ok := schema.(Numeric[uint]); ok {
+			bags, err = scMap.validate(originalData, key, schemaData[key], options)
+		}
+	case reflect.TypeOf(Numeric[uint32]{}):
+		if scMap, ok := schema.(Numeric[uint32]); ok {
+			bags, err = scMap.validate(originalData, key, schemaData[key], options)
+		}
+	case reflect.TypeOf(Numeric[uint64]{}):
+		if scMap, ok := schema.(Numeric[uint64]); ok {
+			bags, err = scMap.validate(originalData, key, schemaData[key], options)
+		}
+	case reflect.TypeOf(Numeric[float32]{}):
+		if scMap, ok := schema.(Numeric[float32]); ok {
+			bags, err = scMap.validate(originalData, key, schemaData[key], options)
+		}
+	case reflect.TypeOf(Numeric[float64]{}):
+		if scMap, ok := schema.(Numeric[float64]); ok {
+			bags, err = scMap.validate(originalData, key, schemaData[key], options)
+		}
+	}
+	pathKey := params.PathKey + key
+	if err != nil {
+		params.ErrorBags.append(pathKey, bags)
+		if options.AbortEarly {
+			return errors.New("error")
+		}
+	}
+	return nil
+}
+
+func (s Numeric[NT]) validate(jsonSource []byte, key string, value any, option Options) ([]string, error) {
 	var bags []string
 	err := s.assertRequired(key, value, &bags)
 
@@ -118,7 +183,7 @@ func (s *Numeric[NT]) validate(jsonSource string, key string, value any, option 
 	return bags, nil
 }
 
-func (s *Numeric[NT]) assertType(key string, value any, bags *[]string) (NT, error) {
+func (s Numeric[NT]) assertType(key string, value any, bags *[]string) (NT, error) {
 	if numericValue, ok := value.(NT); ok {
 		return numericValue, nil
 	}
@@ -130,7 +195,7 @@ func (s *Numeric[NT]) assertType(key string, value any, bags *[]string) (NT, err
 	return 0, NumericValidationError
 }
 
-func (s *Numeric[NT]) assertRequired(key string, value any, bags *[]string) error {
+func (s Numeric[NT]) assertRequired(key string, value any, bags *[]string) error {
 	if s.Required {
 		if value == nil {
 			appendErrorBags(
@@ -154,10 +219,10 @@ func (s *Numeric[NT]) assertRequired(key string, value any, bags *[]string) erro
 	return nil
 }
 
-func (s *Numeric[NT]) assertRequiredIf(jsonSource string, key string, value any, bags *[]string) error {
+func (s Numeric[NT]) assertRequiredIf(jsonSource []byte, key string, value any, bags *[]string) error {
 	if s.RequiredIf != nil {
 		if value == nil {
-			comparedValue := gjson.Get(jsonSource, s.RequiredIf.FieldPath)
+			comparedValue := gjson.GetBytes(jsonSource, s.RequiredIf.FieldPath)
 			if comparedValue.Value() == s.RequiredIf.Value {
 				appendErrorBags(
 					bags,
@@ -168,7 +233,7 @@ func (s *Numeric[NT]) assertRequiredIf(jsonSource string, key string, value any,
 			}
 		} else {
 			if parsedValue, ok := isNumericValue[NT](value); ok && digitLength(parsedValue) == 0 {
-				comparedValue := gjson.Get(jsonSource, s.RequiredIf.FieldPath)
+				comparedValue := gjson.GetBytes(jsonSource, s.RequiredIf.FieldPath)
 				if comparedValue.Value() == s.RequiredIf.Value {
 					appendErrorBags(
 						bags,
@@ -183,10 +248,10 @@ func (s *Numeric[NT]) assertRequiredIf(jsonSource string, key string, value any,
 	return nil
 }
 
-func (s *Numeric[NT]) assertRequiredUnless(jsonSource string, key string, value any, bags *[]string) error {
+func (s Numeric[NT]) assertRequiredUnless(jsonSource []byte, key string, value any, bags *[]string) error {
 	if s.RequiredUnless != nil {
 		if value == nil {
-			comparedValue := gjson.Get(jsonSource, s.RequiredUnless.FieldPath)
+			comparedValue := gjson.GetBytes(jsonSource, s.RequiredUnless.FieldPath)
 			if comparedValue.Value() != s.RequiredUnless.Value {
 				appendErrorBags(
 					bags,
@@ -197,7 +262,7 @@ func (s *Numeric[NT]) assertRequiredUnless(jsonSource string, key string, value 
 			}
 		} else {
 			if parsedValue, ok := isNumericValue[NT](value); ok && digitLength(parsedValue) == 0 {
-				comparedValue := gjson.Get(jsonSource, s.RequiredUnless.FieldPath)
+				comparedValue := gjson.GetBytes(jsonSource, s.RequiredUnless.FieldPath)
 				if comparedValue.Value() != s.RequiredUnless.Value {
 					appendErrorBags(
 						bags,
@@ -212,7 +277,7 @@ func (s *Numeric[NT]) assertRequiredUnless(jsonSource string, key string, value 
 	return nil
 }
 
-func (s *Numeric[NT]) assertMin(key string, value NT, bags *[]string) error {
+func (s Numeric[NT]) assertMin(key string, value NT, bags *[]string) error {
 	if s.Min > 0 && value < NT(s.Min) {
 		appendErrorBags(
 			bags,
@@ -224,7 +289,7 @@ func (s *Numeric[NT]) assertMin(key string, value NT, bags *[]string) error {
 	return nil
 }
 
-func (s *Numeric[NT]) assertMax(key string, value NT, bags *[]string) error {
+func (s Numeric[NT]) assertMax(key string, value NT, bags *[]string) error {
 	if s.Max > 0 && value > NT(s.Max) {
 		appendErrorBags(
 			bags,
@@ -236,11 +301,11 @@ func (s *Numeric[NT]) assertMax(key string, value NT, bags *[]string) error {
 	return nil
 }
 
-func (s *Numeric[NT]) assertMinDigits(key string, value NT, bags *[]string) error {
+func (s Numeric[NT]) assertMinDigits(key string, value NT, bags *[]string) error {
 	if s.MinDigits > 0 && NT(digitLength(value)) < NT(s.MinDigits) {
 		appendErrorBags(
 			bags,
-			fmt.Sprintf("%s total digits must be minimum of %d", key, s.MinDigits),
+			fmt.Sprintf("%s total digits must be minimum of %d digit(s)", key, s.MinDigits),
 			s.Message.MinDigits,
 		)
 		return NumericValidationError
@@ -248,11 +313,11 @@ func (s *Numeric[NT]) assertMinDigits(key string, value NT, bags *[]string) erro
 	return nil
 }
 
-func (s *Numeric[NT]) assertMaxDigits(key string, value NT, bags *[]string) error {
+func (s Numeric[NT]) assertMaxDigits(key string, value NT, bags *[]string) error {
 	if s.MaxDigits > 0 && NT(digitLength(value)) > NT(s.MaxDigits) {
 		appendErrorBags(
 			bags,
-			fmt.Sprintf("%s total digits must be maximum of %d", key, s.MaxDigits),
+			fmt.Sprintf("%s total digits must be maximum of %d digit(s)", key, s.MaxDigits),
 			s.Message.MaxDigits,
 		)
 		return NumericValidationError
@@ -260,7 +325,7 @@ func (s *Numeric[NT]) assertMaxDigits(key string, value NT, bags *[]string) erro
 	return nil
 }
 
-func (s *Numeric[NT]) assertRegex(key string, value NT, bags *[]string) error {
+func (s Numeric[NT]) assertRegex(key string, value NT, bags *[]string) error {
 	regx, err := regexp.Compile(s.Regex)
 	if s.Regex != "" && (err != nil || !regx.MatchString(numericToString(value))) {
 		appendErrorBags(
@@ -273,7 +338,7 @@ func (s *Numeric[NT]) assertRegex(key string, value NT, bags *[]string) error {
 	return nil
 }
 
-func (s *Numeric[NT]) assertNotRegex(key string, value NT, bags *[]string) error {
+func (s Numeric[NT]) assertNotRegex(key string, value NT, bags *[]string) error {
 	regx, err := regexp.Compile(s.Regex)
 	if s.NotRegex != "" && digitLength(value) > 0 && (err != nil || regx.MatchString(numericToString(value))) {
 		appendErrorBags(
@@ -286,7 +351,7 @@ func (s *Numeric[NT]) assertNotRegex(key string, value NT, bags *[]string) error
 	return nil
 }
 
-func (s *Numeric[NT]) assertIn(key string, value NT, bags *[]string) error {
+func (s Numeric[NT]) assertIn(key string, value NT, bags *[]string) error {
 	if len(s.In) > 0 && digitLength(value) > 0 && !slices.Contains(s.In, value) {
 		var stringIn []string
 		for _, n := range s.In {
@@ -302,7 +367,7 @@ func (s *Numeric[NT]) assertIn(key string, value NT, bags *[]string) error {
 	return nil
 }
 
-func (s *Numeric[NT]) assertNotIn(key string, value NT, bags *[]string) error {
+func (s Numeric[NT]) assertNotIn(key string, value NT, bags *[]string) error {
 	if len(s.In) > 0 && digitLength(value) > 0 && slices.Contains(s.In, value) {
 		var stringNotIn []string
 		for _, n := range s.NotIn {
@@ -318,7 +383,7 @@ func (s *Numeric[NT]) assertNotIn(key string, value NT, bags *[]string) error {
 	return nil
 }
 
-func (s *Numeric[NT]) assertCustomValidation(fc func(v NT) error, value NT, bags *[]string) error {
+func (s Numeric[NT]) assertCustomValidation(fc func(v NT) error, value NT, bags *[]string) error {
 	err := fc(value)
 	if err != nil {
 		appendErrorBags(
@@ -329,6 +394,10 @@ func (s *Numeric[NT]) assertCustomValidation(fc func(v NT) error, value NT, bags
 		return NumericValidationError
 	}
 	return nil
+}
+
+func checkSchema() {
+
 }
 
 func isNumericValue[N NumericValue](value any) (N, bool) {

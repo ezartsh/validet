@@ -2,9 +2,8 @@ package validet
 
 import (
 	"encoding/json"
-	"fmt"
+	"errors"
 	"reflect"
-	"strconv"
 )
 
 type Options struct {
@@ -13,209 +12,81 @@ type Options struct {
 
 type Validation struct {
 	data    DataObject
-	schema  SchemaObject
+	schema  SchemaRules
 	options Options
 }
 
-func (v *Validation) validate(b *ErrorBag) {
+func (v *Validation) check(b *ErrorBag) {
 	errorBags := *b
 
-	jsonString, err := json.Marshal(v.data)
+	jsonData, err := json.Marshal(v.data)
 
 	if err != nil {
-		jsonString = []byte{}
+		jsonData = []byte{}
 	}
 
-	v.mapSchemaObject(string(jsonString), "", "", v.data, v.schema, &errorBags)
+	mapSchemas(jsonData, "", "", v.data, v.schema, &errorBags, v.options)
 }
 
-func (v *Validation) mapSchemaObject(jsonString string, pathKey string, key string, data any, schema any, b *ErrorBag) {
+func mapSchemas(jsonString []byte, pathKey string, key string, data any, schema any, b *ErrorBag, option Options) {
 	errorBags := *b
 
 	if pathKey != "" {
 		pathKey = pathKey + "."
 	}
 
-	if isSchema(schema) {
-		schemaObject := schema.(SchemaObject)
-		schemaData := data.(DataObject)
-		for scKey, scValue := range schemaObject {
-			v.mapSchemaObject(jsonString, pathKey, scKey, schemaData, scValue, &errorBags)
-			if v.options.AbortEarly && len(errorBags.Errors) > 0 {
+	schemaData := data.(DataObject)
+	if isSchemaRule(schema) {
+		schemaRules := schema.(map[string]Rule)
+		for scKey, scRules := range schemaRules {
+			mapSchemas(jsonString, pathKey, scKey, schemaData, scRules, &errorBags, option)
+			if option.AbortEarly && len(errorBags.Errors) > 0 {
 				return
 			}
 		}
 	} else {
-		if isSchemaOfObject(schema) {
-			schemaData := data.(DataObject)
-			if scObject, ok := schema.(Object); ok {
-				bags, err := scObject.validate(jsonString, key, schemaData[key], v.options)
-				if err != nil {
-					errorBags.append(pathKey+key, bags)
-				} else {
-					schemaDataValue := schemaData[key].(DataObject)
-					for scObjItemKey, scObjItemValue := range scObject.Item {
-						v.mapSchemaObject(jsonString, pathKey+key, scObjItemKey, schemaDataValue, scObjItemValue, &errorBags)
-						if v.options.AbortEarly && len(errorBags.Errors) > 0 {
-							return
-						}
-					}
-				}
-			}
-		} else if isSchemaOfSlice(schema) {
-			schemaData := data.(DataObject)
-			var err error
-			var bags []string
-
-			switch reflect.TypeOf(schema) {
-			case reflect.TypeOf(Slice[string]{}):
-				if scMap, ok := schema.(Slice[string]); ok {
-					bags, err = scMap.validate(jsonString, key, schemaData[key], v.options)
-				}
-			case reflect.TypeOf(Slice[int]{}):
-				if scMap, ok := schema.(Slice[int]); ok {
-					bags, err = scMap.validate(jsonString, key, schemaData[key], v.options)
-				}
-			case reflect.TypeOf(Slice[int32]{}):
-				if scMap, ok := schema.(Slice[int32]); ok {
-					bags, err = scMap.validate(jsonString, key, schemaData[key], v.options)
-				}
-			case reflect.TypeOf(Slice[int64]{}):
-				if scMap, ok := schema.(Slice[int64]); ok {
-					bags, err = scMap.validate(jsonString, key, schemaData[key], v.options)
-				}
-			case reflect.TypeOf(Slice[float32]{}):
-				if scMap, ok := schema.(Slice[float32]); ok {
-					bags, err = scMap.validate(jsonString, key, schemaData[key], v.options)
-				}
-			case reflect.TypeOf(Slice[float64]{}):
-				if scMap, ok := schema.(Slice[float64]); ok {
-					bags, err = scMap.validate(jsonString, key, schemaData[key], v.options)
-				}
-			}
-			if err != nil {
-				errorBags.append(key, bags)
-				if v.options.AbortEarly {
-					return
-				}
-			}
-		} else if isSchemaOfSliceObject(schema) {
-			if scSliceObject, ok := schema.(SliceObject); ok {
-				schemaData := data.(DataObject)
-				bags, err := scSliceObject.validate(jsonString, key, schemaData[key], v.options)
-				if err != nil {
-					errorBags.append(key, bags)
-					if v.options.AbortEarly {
-						return
-					}
-				} else {
-					schemaDataValues := schemaData[key].([]DataObject)
-					for i, value := range schemaDataValues {
-						for scObjItemKey, scObjItemValue := range scSliceObject.Item {
-							v.mapSchemaObject(jsonString, pathKey+key+"."+strconv.Itoa(i), scObjItemKey, value, scObjItemValue, &errorBags)
-							if v.options.AbortEarly && len(errorBags.Errors) > 0 {
-								return
-							}
-						}
-					}
-				}
-			}
-		} else if isSchemaOfString(schema) {
-			if scMap, ok := schema.(String); ok {
-				schemaData := data.(DataObject)
-				bags, err := scMap.validate(jsonString, key, schemaData[key], v.options)
-				pathKey = pathKey + key
-				if err != nil {
-					errorBags.append(pathKey, bags)
-					if v.options.AbortEarly {
-						return
-					}
-				}
-			}
-		} else if isSchemaOfNumeric(schema) {
-			schemaData := data.(DataObject)
-			var err error
-			var bags []string
-
-			switch reflect.TypeOf(schema) {
-			case reflect.TypeOf(Numeric[int]{}):
-				if scMap, ok := schema.(Numeric[int]); ok {
-					bags, err = scMap.validate(jsonString, key, schemaData[key], v.options)
-				}
-			case reflect.TypeOf(Numeric[int32]{}):
-				if scMap, ok := schema.(Numeric[int32]); ok {
-					bags, err = scMap.validate(jsonString, key, schemaData[key], v.options)
-				}
-			case reflect.TypeOf(Numeric[int64]{}):
-				if scMap, ok := schema.(Numeric[int64]); ok {
-					bags, err = scMap.validate(jsonString, key, schemaData[key], v.options)
-				}
-			case reflect.TypeOf(Numeric[float32]{}):
-				if scMap, ok := schema.(Numeric[float32]); ok {
-					bags, err = scMap.validate(jsonString, key, schemaData[key], v.options)
-				}
-			case reflect.TypeOf(Numeric[float64]{}):
-				if scMap, ok := schema.(Numeric[float64]); ok {
-					bags, err = scMap.validate(jsonString, key, schemaData[key], v.options)
-				}
-			}
-			pathKey = pathKey + key
-			if err != nil {
-				errorBags.append(pathKey, bags)
-				if v.options.AbortEarly {
-					return
-				}
+		if schemaRule, ok := isRule(schema); ok {
+			if schemaRule.isMyTypeOf(schema) {
+				schemaRule.process(RuleParams{
+					OriginalData: jsonString,
+					DataKey:      schemaData,
+					PathKey:      pathKey,
+					Key:          key,
+					Schema:       schemaRule,
+					ErrorBags:    &errorBags,
+					Option:       option,
+				})
 			}
 		}
 	}
 }
 
-func Validate(d DataObject, schema SchemaObject, options Options) {
+func validate(d DataObject, schema map[string]Rule, options Options) (ErrorBag, error) {
 	var errorBags = NewErrorBags()
 	validation := Validation{
 		data:    d,
 		schema:  schema,
 		options: options,
 	}
-	validation.validate(errorBags)
+	validation.check(errorBags)
 
-	for key, strings := range errorBags.Errors {
-		fmt.Println(key, strings)
+	if len(errorBags.Errors) > 0 {
+		return *errorBags, errors.New("error validation inputs.")
 	}
+	return ErrorBag{}, nil
 }
 
-func isSchemaOfString(val any) bool {
-	return reflect.TypeOf(val).Kind() == reflect.Struct && reflect.TypeOf(val) == reflect.TypeOf(String{})
-}
-
-func isSchemaOfNumeric(val any) bool {
-	return reflect.TypeOf(val).Kind() == reflect.Struct && (reflect.TypeOf(val) == reflect.TypeOf(Numeric[int]{}) ||
-		reflect.TypeOf(val) == reflect.TypeOf(Numeric[int32]{}) ||
-		reflect.TypeOf(val) == reflect.TypeOf(Numeric[int64]{}) ||
-		reflect.TypeOf(val) == reflect.TypeOf(Numeric[float32]{}) ||
-		reflect.TypeOf(val) == reflect.TypeOf(Numeric[float64]{}))
-}
-
-func isSchemaOfObject(val any) bool {
-	return reflect.TypeOf(val).Kind() == reflect.Struct && reflect.TypeOf(val) == reflect.TypeOf(Object{})
-}
-
-func isSchemaOfSlice(val any) bool {
-	return reflect.TypeOf(val).Kind() == reflect.Struct && (reflect.TypeOf(val) == reflect.TypeOf(Slice[int]{}) ||
-		reflect.TypeOf(val) == reflect.TypeOf(Slice[int32]{}) ||
-		reflect.TypeOf(val) == reflect.TypeOf(Slice[int64]{}) ||
-		reflect.TypeOf(val) == reflect.TypeOf(Slice[float32]{}) ||
-		reflect.TypeOf(val) == reflect.TypeOf(Slice[float64]{}) ||
-		reflect.TypeOf(val) == reflect.TypeOf(Slice[string]{}))
-}
-
-func isSchemaOfSliceObject(val any) bool {
-	return reflect.TypeOf(val).Kind() == reflect.Struct && reflect.TypeOf(val) == reflect.TypeOf(SliceObject{})
-}
-
-func isSchema(val any) bool {
-	if value, ok := val.(SchemaObject); ok {
-		return reflect.TypeOf(value) == reflect.TypeOf(SchemaObject{})
+func isSchemaRule(val any) bool {
+	if value, ok := val.(map[string]Rule); ok {
+		return reflect.TypeOf(value) == reflect.TypeOf(map[string]Rule{})
 	}
 	return false
+}
+
+func isRule(val any) (Rule, bool) {
+	var value Rule
+	if value, ok := val.(Rule); ok {
+		return value, ok
+	}
+	return value, false
 }

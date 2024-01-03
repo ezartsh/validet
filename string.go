@@ -1,11 +1,14 @@
 package validet
 
 import (
+	"errors"
 	"fmt"
-	"github.com/tidwall/gjson"
+	"reflect"
 	"regexp"
 	"slices"
 	"strings"
+
+	"github.com/tidwall/gjson"
 )
 
 type StringErrorMessage struct {
@@ -52,7 +55,25 @@ const (
 	urlHttps        = "https"
 )
 
-func (s *String) validate(jsonSource string, key string, value any, option Options) ([]string, error) {
+func (s String) isMyTypeOf(schema any) bool {
+	return reflect.TypeOf(schema).Kind() == reflect.Struct && reflect.TypeOf(schema) == reflect.TypeOf(String{})
+}
+
+func (s String) process(params RuleParams) error {
+	errorBags := params.ErrorBags
+	schemaData := params.DataKey.(DataObject)
+	bags, err := params.Schema.validate(params.OriginalData, params.Key, schemaData[params.Key], params.Option)
+	pathKey := params.PathKey + params.Key
+	if err != nil {
+		errorBags.append(pathKey, bags)
+		if params.Option.AbortEarly {
+			return errors.New("test")
+		}
+	}
+	return nil
+}
+
+func (s String) validate(source []byte, key string, value any, option Options) ([]string, error) {
 	var bags []string
 	err := s.assertRequired(key, value, &bags)
 
@@ -60,11 +81,11 @@ func (s *String) validate(jsonSource string, key string, value any, option Optio
 		return bags, err
 	}
 
-	err = s.assertRequiredIf(jsonSource, key, value, &bags)
+	if err = s.assertRequiredIf(source, key, value, &bags); err != nil {
+		return bags, err
+	}
 
-	err = s.assertRequiredUnless(jsonSource, key, value, &bags)
-
-	if err != nil {
+	if err = s.assertRequiredUnless(source, key, value, &bags); err != nil {
 		return bags, err
 	}
 
@@ -131,7 +152,7 @@ func (s *String) validate(jsonSource string, key string, value any, option Optio
 	return bags, nil
 }
 
-func (s *String) assertType(key string, value any, bags *[]string) (string, error) {
+func (s String) assertType(key string, value any, bags *[]string) (string, error) {
 	var stringValue string
 	if isStringValue(value) {
 		stringValue = value.(string)
@@ -146,7 +167,7 @@ func (s *String) assertType(key string, value any, bags *[]string) (string, erro
 	return stringValue, nil
 }
 
-func (s *String) assertRequired(key string, value any, bags *[]string) error {
+func (s String) assertRequired(key string, value any, bags *[]string) error {
 	if s.Required {
 		if value == nil {
 			appendErrorBags(
@@ -170,9 +191,9 @@ func (s *String) assertRequired(key string, value any, bags *[]string) error {
 	return nil
 }
 
-func (s *String) assertRequiredIf(jsonSource string, key string, value any, bags *[]string) error {
+func (s String) assertRequiredIf(jsonSource []byte, key string, value any, bags *[]string) error {
 	if s.RequiredIf != nil && (value == nil || (isStringValue(value) && stringLength(value) == 0)) {
-		comparedValue := gjson.Get(jsonSource, s.RequiredIf.FieldPath)
+		comparedValue := gjson.GetBytes(jsonSource, s.RequiredIf.FieldPath)
 		if comparedValue.String() == s.RequiredIf.Value {
 			appendErrorBags(
 				bags,
@@ -185,9 +206,9 @@ func (s *String) assertRequiredIf(jsonSource string, key string, value any, bags
 	return nil
 }
 
-func (s *String) assertRequiredUnless(jsonSource string, key string, value any, bags *[]string) error {
+func (s String) assertRequiredUnless(jsonSource []byte, key string, value any, bags *[]string) error {
 	if s.RequiredUnless != nil && (value == nil || (isStringValue(value) && stringLength(value) == 0)) {
-		comparedValue := gjson.Get(jsonSource, s.RequiredUnless.FieldPath)
+		comparedValue := gjson.GetBytes(jsonSource, s.RequiredUnless.FieldPath)
 		if comparedValue.String() != s.RequiredUnless.Value {
 			appendErrorBags(
 				bags,
@@ -200,7 +221,7 @@ func (s *String) assertRequiredUnless(jsonSource string, key string, value any, 
 	return nil
 }
 
-func (s *String) assertMin(key string, value string, bags *[]string) error {
+func (s String) assertMin(key string, value string, bags *[]string) error {
 	if s.Min > 0 && stringLength(value) < s.Min {
 		appendErrorBags(
 			bags,
@@ -212,7 +233,7 @@ func (s *String) assertMin(key string, value string, bags *[]string) error {
 	return nil
 }
 
-func (s *String) assertMax(key string, value string, bags *[]string) error {
+func (s String) assertMax(key string, value string, bags *[]string) error {
 	if s.Max > 0 && stringLength(value) > s.Max {
 		appendErrorBags(
 			bags,
@@ -224,7 +245,7 @@ func (s *String) assertMax(key string, value string, bags *[]string) error {
 	return nil
 }
 
-func (s *String) assertRegex(key string, value string, bags *[]string) error {
+func (s String) assertRegex(key string, value string, bags *[]string) error {
 	regx, err := regexp.Compile(s.Regex)
 	if s.Regex != "" && stringLength(value) > 0 && (err != nil || !regx.MatchString(value)) {
 		appendErrorBags(
@@ -237,7 +258,7 @@ func (s *String) assertRegex(key string, value string, bags *[]string) error {
 	return nil
 }
 
-func (s *String) assertNotRegex(key string, value string, bags *[]string) error {
+func (s String) assertNotRegex(key string, value string, bags *[]string) error {
 	regx, err := regexp.Compile(s.Regex)
 	if s.NotRegex != "" && stringLength(value) > 0 && (err != nil || regx.MatchString(value)) {
 		appendErrorBags(
@@ -250,7 +271,7 @@ func (s *String) assertNotRegex(key string, value string, bags *[]string) error 
 	return nil
 }
 
-func (s *String) assertIn(key string, value string, bags *[]string) error {
+func (s String) assertIn(key string, value string, bags *[]string) error {
 	if len(s.In) > 0 && stringLength(value) > 0 && !slices.Contains(s.In, value) {
 		appendErrorBags(
 			bags,
@@ -262,7 +283,7 @@ func (s *String) assertIn(key string, value string, bags *[]string) error {
 	return nil
 }
 
-func (s *String) assertNotIn(key string, value string, bags *[]string) error {
+func (s String) assertNotIn(key string, value string, bags *[]string) error {
 	if len(s.NotIn) > 0 && stringLength(value) > 0 && slices.Contains(s.NotIn, value) {
 		appendErrorBags(
 			bags,
@@ -274,7 +295,7 @@ func (s *String) assertNotIn(key string, value string, bags *[]string) error {
 	return nil
 }
 
-func (s *String) assertEmail(key string, value string, bags *[]string) error {
+func (s String) assertEmail(key string, value string, bags *[]string) error {
 	if s.Email && stringLength(value) > 0 {
 		regx, err := regexp.Compile(`^([a-zA-Z0-9._%-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})$`)
 		if err != nil || !regx.MatchString(value) {
@@ -289,7 +310,7 @@ func (s *String) assertEmail(key string, value string, bags *[]string) error {
 	return nil
 }
 
-func (s *String) assertAlpha(key string, value string, bags *[]string) error {
+func (s String) assertAlpha(key string, value string, bags *[]string) error {
 	if s.Alpha && stringLength(value) > 0 {
 		regx, err := regexp.Compile(`^[a-zA-Z]+$`)
 		if err != nil || !regx.MatchString(value) {
@@ -304,7 +325,7 @@ func (s *String) assertAlpha(key string, value string, bags *[]string) error {
 	return nil
 }
 
-func (s *String) assertAlphaNumeric(key string, value string, bags *[]string) error {
+func (s String) assertAlphaNumeric(key string, value string, bags *[]string) error {
 	if s.AlphaNumeric && stringLength(value) > 0 {
 		regx, err := regexp.Compile(`^[a-zA-Z0-9]+$`)
 		if err != nil || !regx.MatchString(value) {
@@ -319,7 +340,7 @@ func (s *String) assertAlphaNumeric(key string, value string, bags *[]string) er
 	return nil
 }
 
-func (s *String) assertUrl(key string, value string, bags *[]string) error {
+func (s String) assertUrl(key string, value string, bags *[]string) error {
 	if s.Url != nil && stringLength(value) > 0 {
 		var prefix []string
 		if s.Url.Http {
@@ -345,7 +366,7 @@ func (s *String) assertUrl(key string, value string, bags *[]string) error {
 	return nil
 }
 
-func (s *String) assertCustomValidation(fc func(v string) error, value any, bags *[]string) error {
+func (s String) assertCustomValidation(fc func(v string) error, value any, bags *[]string) error {
 	err := fc(value.(string))
 	if err != nil {
 		appendErrorBags(
