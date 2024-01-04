@@ -2,6 +2,7 @@ package validet
 
 import (
 	"errors"
+	"fmt"
 	"reflect"
 	"testing"
 )
@@ -18,23 +19,15 @@ func (cs CustomString) isMyTypeOf(schema any) bool {
 	return reflect.TypeOf(schema).Kind() == reflect.Struct && reflect.TypeOf(schema) == reflect.TypeOf(CustomString{})
 }
 
-func (cs CustomString) process(params RuleParams) error {
-	errorBags := params.ErrorBags
+func (cs CustomString) process(params RuleParams) ([]string, error) {
 	schemaData := params.DataKey.(DataObject)
-	bags, err := params.Schema.validate(params.OriginalData, params.Key, schemaData[params.Key], params.Option)
-	pathKey := params.PathKey + params.Key
-	if err != nil {
-		errorBags.append(pathKey, bags)
-		if params.Option.AbortEarly {
-			return errors.New("test")
-		}
-	}
-	return nil
+	return params.Schema.validate(params.OriginalData, params.Key, schemaData[params.Key], params.Option)
 }
 
 func TestValidate(t *testing.T) {
 	data := DataObject{
 		"name":        "tono",
+		"new_name":    false,
 		"email":       "",
 		"description": "",
 		"url":         "http://www.ada.com",
@@ -53,8 +46,9 @@ func TestValidate(t *testing.T) {
 	schema := NewSchema(
 		data,
 		map[string]Rule{
-			"new_name": CustomString{Required: true},
-			"name":     String{Required: true, Min: 10, Message: StringErrorMessage{Required: "name dibutuhkan"}},
+			"name":        String{Required: true, Min: 10, Message: StringErrorMessage{Required: "name dibutuhkan"}},
+			"new_name":    Boolean{Required: true},
+			"custom_name": CustomString{Required: true},
 			"email": String{RequiredUnless: &RequiredUnless{
 				FieldPath: "name",
 				Value:     "tono",
@@ -102,5 +96,7 @@ func TestValidate(t *testing.T) {
 		Options{},
 	)
 
-	schema.Validate()
+	bags, _ := schema.Validate()
+
+	fmt.Println(bags)
 }

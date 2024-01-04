@@ -1,7 +1,6 @@
 package validet
 
 import (
-	"errors"
 	"fmt"
 	"reflect"
 	"regexp"
@@ -24,6 +23,7 @@ type NumericErrorMessage struct {
 	NotRegex       string
 	In             string
 	NotIn          string
+	Custom         string
 }
 
 type NumericValue interface {
@@ -42,7 +42,7 @@ type Numeric[NT NumericValue] struct {
 	NotRegex       string
 	In             []NT
 	NotIn          []NT
-	Custom         func(v NT) error
+	Custom         func(v NT, look Lookup) error
 	Message        NumericErrorMessage
 }
 
@@ -58,7 +58,7 @@ func (s Numeric[NT]) isMyTypeOf(schema any) bool {
 			reflect.TypeOf(schema) == reflect.TypeOf(Numeric[float64]{}))
 }
 
-func (s Numeric[NT]) process(params RuleParams) error {
+func (s Numeric[NT]) process(params RuleParams) ([]string, error) {
 	schemaData := params.DataKey.(DataObject)
 	var err error
 	var bags []string
@@ -102,14 +102,15 @@ func (s Numeric[NT]) process(params RuleParams) error {
 			bags, err = scMap.validate(originalData, key, schemaData[key], options)
 		}
 	}
-	pathKey := params.PathKey + key
-	if err != nil {
-		params.ErrorBags.append(pathKey, bags)
-		if options.AbortEarly {
-			return errors.New("error")
-		}
-	}
-	return nil
+	return bags, err
+	// pathKey := params.PathKey + key
+	// if err != nil {
+	// 	params.ErrorBags.append(pathKey, bags)
+	// 	if options.AbortEarly {
+	// 		return errors.New("error")
+	// 	}
+	// }
+	// return nil
 }
 
 func (s Numeric[NT]) validate(jsonSource []byte, key string, value any, option Options) ([]string, error) {
@@ -121,6 +122,10 @@ func (s Numeric[NT]) validate(jsonSource []byte, key string, value any, option O
 	}
 
 	err = s.assertRequiredIf(jsonSource, key, value, &bags)
+
+	if err != nil {
+		return bags, err
+	}
 
 	err = s.assertRequiredUnless(jsonSource, key, value, &bags)
 
@@ -169,7 +174,7 @@ func (s Numeric[NT]) validate(jsonSource []byte, key string, value any, option O
 		}
 
 		if s.Custom != nil {
-			if err := s.assertCustomValidation(s.Custom, parsedValue, &bags); option.AbortEarly && err != nil {
+			if err := s.assertCustomValidation(s.Custom, jsonSource, parsedValue, &bags); option.AbortEarly && err != nil {
 				return bags, err
 			}
 		}
@@ -383,13 +388,15 @@ func (s Numeric[NT]) assertNotIn(key string, value NT, bags *[]string) error {
 	return nil
 }
 
-func (s Numeric[NT]) assertCustomValidation(fc func(v NT) error, value NT, bags *[]string) error {
-	err := fc(value)
+func (s Numeric[NT]) assertCustomValidation(fc func(v NT, look Lookup) error, jsonSource []byte, value NT, bags *[]string) error {
+	err := fc(value, func(k string) gjson.Result {
+		return gjson.GetBytes(jsonSource, k)
+	})
 	if err != nil {
 		appendErrorBags(
 			bags,
 			err.Error(),
-			"",
+			s.Message.Custom,
 		)
 		return NumericValidationError
 	}

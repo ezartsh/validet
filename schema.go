@@ -13,7 +13,7 @@ type RuleParams struct {
 type Rule interface {
 	validate(source []byte, key string, value any, option Options) ([]string, error)
 	isMyTypeOf(schema any) bool
-	process(RuleParams) error
+	process(RuleParams) ([]string, error)
 }
 
 type SchemaRules = map[string]Rule

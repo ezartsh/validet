@@ -1,7 +1,6 @@
 package validet
 
 import (
-	"errors"
 	"fmt"
 	"reflect"
 	"strconv"
@@ -15,6 +14,7 @@ type SliceObjectErrorMessage struct {
 	RequiredUnless string
 	Min            string
 	Max            string
+	Custom         string
 }
 
 type SliceObject struct {
@@ -24,6 +24,7 @@ type SliceObject struct {
 	Min            int
 	Max            int
 	Item           DataObject
+	Custom         func(v []DataObject, look Lookup) error
 	Message        SliceObjectErrorMessage
 }
 
@@ -31,10 +32,10 @@ func (s SliceObject) isMyTypeOf(schema any) bool {
 	return reflect.TypeOf(schema).Kind() == reflect.Struct && reflect.TypeOf(schema) == reflect.TypeOf(SliceObject{})
 }
 
-func (s SliceObject) process(params RuleParams) error {
+func (s SliceObject) process(params RuleParams) ([]string, error) {
 	schemaData := params.DataKey.(DataObject)
-	var err error
-	var bags []string
+	// var err error
+	// var bags []string
 
 	errorBags := *params.ErrorBags
 	schema := params.Schema
@@ -45,31 +46,32 @@ func (s SliceObject) process(params RuleParams) error {
 	if scSliceObject, ok := schema.(SliceObject); ok {
 		bags, err := scSliceObject.validate(originalData, key, schemaData[key], options)
 		if err != nil {
-			errorBags.append(params.PathKey+key, bags)
-			if options.AbortEarly {
-				return errors.New("new error")
-			}
+			return bags, err
+			// errorBags.append(params.PathKey+key, bags)
+			// if options.AbortEarly {
+			// 	return errors.New("new error")
+			// }
 		} else {
 			schemaDataValues := schemaData[key].([]DataObject)
 			for i, value := range schemaDataValues {
 				for scObjItemKey, scObjItemValue := range scSliceObject.Item {
 					mapSchemas(originalData, params.PathKey+key+"."+strconv.Itoa(i), scObjItemKey, value, scObjItemValue, &errorBags, options)
-					if options.AbortEarly && len(errorBags.Errors) > 0 {
-						return errors.New("new error")
-					}
+					// if options.AbortEarly && len(errorBags.Errors) > 0 {
+					// 	return errors.New("new error")
+					// }
 				}
 			}
 		}
 	}
 
-	pathKey := params.PathKey + key
-	if err != nil {
-		params.ErrorBags.append(pathKey, bags)
-		if options.AbortEarly {
-			return errors.New("error")
-		}
-	}
-	return nil
+	// pathKey := params.PathKey + key
+	// if err != nil {
+	// 	params.ErrorBags.append(pathKey, bags)
+	// 	if options.AbortEarly {
+	// 		return errors.New("error")
+	// 	}
+	// }
+	return []string{}, nil
 }
 
 func (s SliceObject) validate(jsonSource []byte, key string, value any, option Options) ([]string, error) {
@@ -94,6 +96,12 @@ func (s SliceObject) validate(jsonSource []byte, key string, value any, option O
 
 		if len(values) > 0 {
 
+			parsedValue, err := s.assertType(key, values, &bags)
+
+			if err != nil {
+				return bags, err
+			}
+
 			if err := s.assertMin(key, values, &bags); option.AbortEarly && err != nil {
 				return bags, err
 			}
@@ -101,6 +109,13 @@ func (s SliceObject) validate(jsonSource []byte, key string, value any, option O
 			if err := s.assertMax(key, values, &bags); option.AbortEarly && err != nil {
 				return bags, err
 			}
+
+			if s.Custom != nil {
+				if err := s.assertCustomValidation(s.Custom, jsonSource, parsedValue, &bags); option.AbortEarly && err != nil {
+					return bags, err
+				}
+			}
+
 		}
 
 	}
@@ -201,6 +216,21 @@ func (s SliceObject) assertMax(key string, values []DataObject, bags *[]string) 
 			bags,
 			fmt.Sprintf("%s must be maximum of %d", key, s.Max),
 			s.Message.Max,
+		)
+		return SliceObjectValidationError
+	}
+	return nil
+}
+
+func (s SliceObject) assertCustomValidation(fc func(v []DataObject, look Lookup) error, jsonSource []byte, value []DataObject, bags *[]string) error {
+	err := fc(value, func(k string) gjson.Result {
+		return gjson.GetBytes(jsonSource, k)
+	})
+	if err != nil {
+		appendErrorBags(
+			bags,
+			err.Error(),
+			s.Message.Custom,
 		)
 		return SliceObjectValidationError
 	}

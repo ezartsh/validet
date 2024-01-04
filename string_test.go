@@ -225,7 +225,7 @@ func Test_String_Url(t *testing.T) {
 
 func Test_String_Custom_Validation(t *testing.T) {
 	t.Run("it should error when the custom validation return error", func(t *testing.T) {
-		schema := String{Custom: func(v string) error {
+		schema := String{Custom: func(v string, look Lookup) error {
 			return StringValidationError
 		}}
 		_, err := schema.validate([]byte{}, "test", "_test_", Options{})

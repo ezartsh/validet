@@ -31,3 +31,6 @@ var StringValidationError = errors.New("string validation failed")
 var NumericValidationError = errors.New("numeric validation failed")
 var SliceValidationError = errors.New("slice validation failed")
 var FileValidationError = errors.New("file validation failed")
+var BooleanValidationError = errors.New("boolean validation failed")
+
+var ErrorRequiredField = errors.New("field cannot be empty")

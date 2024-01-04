@@ -1,7 +1,6 @@
 package validet
 
 import (
-	"errors"
 	"fmt"
 	"reflect"
 	"regexp"
@@ -25,6 +24,7 @@ type StringErrorMessage struct {
 	Alpha          string
 	AlphaNumeric   string
 	Url            string
+	Custom         string
 }
 
 type String struct {
@@ -41,7 +41,7 @@ type String struct {
 	Alpha          bool
 	AlphaNumeric   bool
 	Url            *Url
-	Custom         func(v string) error
+	Custom         func(v string, look Lookup) error
 	Message        StringErrorMessage
 }
 
@@ -59,18 +59,18 @@ func (s String) isMyTypeOf(schema any) bool {
 	return reflect.TypeOf(schema).Kind() == reflect.Struct && reflect.TypeOf(schema) == reflect.TypeOf(String{})
 }
 
-func (s String) process(params RuleParams) error {
-	errorBags := params.ErrorBags
+func (s String) process(params RuleParams) ([]string, error) {
+	// errorBags := params.ErrorBags
 	schemaData := params.DataKey.(DataObject)
-	bags, err := params.Schema.validate(params.OriginalData, params.Key, schemaData[params.Key], params.Option)
-	pathKey := params.PathKey + params.Key
-	if err != nil {
-		errorBags.append(pathKey, bags)
-		if params.Option.AbortEarly {
-			return errors.New("test")
-		}
-	}
-	return nil
+	return params.Schema.validate(params.OriginalData, params.Key, schemaData[params.Key], params.Option)
+	// pathKey := params.PathKey + params.Key
+	// if err != nil {
+	// 	errorBags.append(pathKey, bags)
+	// 	if params.Option.AbortEarly {
+	// 		return errors.New("test")
+	// 	}
+	// }
+	// return nil
 }
 
 func (s String) validate(source []byte, key string, value any, option Options) ([]string, error) {
@@ -138,7 +138,7 @@ func (s String) validate(source []byte, key string, value any, option Options) (
 		}
 
 		if s.Custom != nil {
-			if err := s.assertCustomValidation(s.Custom, stringValue, &bags); option.AbortEarly && err != nil {
+			if err := s.assertCustomValidation(s.Custom, source, stringValue, &bags); option.AbortEarly && err != nil {
 				return bags, err
 			}
 		}
@@ -223,11 +223,7 @@ func (s String) assertRequiredUnless(jsonSource []byte, key string, value any, b
 
 func (s String) assertMin(key string, value string, bags *[]string) error {
 	if s.Min > 0 && stringLength(value) < s.Min {
-		appendErrorBags(
-			bags,
-			fmt.Sprintf("%s must be minimum of %d character(s)", key, s.Min),
-			s.Message.Min,
-		)
+		appendErrorBags(bags, msgf("%s must be minimum of %d character(s)", key, s.Min), s.Message.Min)
 		return StringValidationError
 	}
 	return nil
@@ -237,7 +233,7 @@ func (s String) assertMax(key string, value string, bags *[]string) error {
 	if s.Max > 0 && stringLength(value) > s.Max {
 		appendErrorBags(
 			bags,
-			fmt.Sprintf("%s must be maximum of %d character(s)", key, s.Max),
+			msgf("%s must be maximum of %d character(s)", key, s.Max),
 			s.Message.Max,
 		)
 		return StringValidationError
@@ -366,13 +362,15 @@ func (s String) assertUrl(key string, value string, bags *[]string) error {
 	return nil
 }
 
-func (s String) assertCustomValidation(fc func(v string) error, value any, bags *[]string) error {
-	err := fc(value.(string))
+func (s String) assertCustomValidation(fc func(v string, look Lookup) error, jsonSource []byte, value any, bags *[]string) error {
+	err := fc(value.(string), func(k string) gjson.Result {
+		return gjson.GetBytes(jsonSource, k)
+	})
 	if err != nil {
 		appendErrorBags(
 			bags,
 			err.Error(),
-			s.Message.Max,
+			s.Message.Custom,
 		)
 		return StringValidationError
 	}

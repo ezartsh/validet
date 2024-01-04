@@ -1,7 +1,6 @@
 package validet
 
 import (
-	"errors"
 	"fmt"
 	"reflect"
 
@@ -14,6 +13,7 @@ type SliceErrorMessage struct {
 	RequiredUnless string
 	Min            string
 	Max            string
+	Custom         string
 }
 
 type SliceValueType interface {
@@ -24,9 +24,9 @@ type Slice[T SliceValueType] struct {
 	Required       bool
 	RequiredIf     *RequiredIf
 	RequiredUnless *RequiredUnless
-	ValueType      T
 	Min            int
 	Max            int
+	Custom         func(v []T, look Lookup) error
 	Message        SliceErrorMessage
 }
 
@@ -42,7 +42,7 @@ func (s Slice[T]) isMyTypeOf(schema any) bool {
 		reflect.TypeOf(schema) == reflect.TypeOf(Slice[string]{}))
 }
 
-func (s Slice[T]) process(params RuleParams) error {
+func (s Slice[T]) process(params RuleParams) ([]string, error) {
 	schemaData := params.DataKey.(DataObject)
 	var err error
 	var bags []string
@@ -91,14 +91,16 @@ func (s Slice[T]) process(params RuleParams) error {
 		}
 	}
 
-	pathKey := params.PathKey + key
-	if err != nil {
-		params.ErrorBags.append(pathKey, bags)
-		if options.AbortEarly {
-			return errors.New("error")
-		}
-	}
-	return nil
+	return bags, err
+
+	// pathKey := params.PathKey + key
+	// if err != nil {
+	// 	params.ErrorBags.append(pathKey, bags)
+	// 	if options.AbortEarly {
+	// 		return errors.New("error")
+	// 	}
+	// }
+	// return []string{}, nil
 }
 
 func (s Slice[T]) validate(jsonSource []byte, key string, value any, option Options) ([]string, error) {
@@ -135,6 +137,12 @@ func (s Slice[T]) validate(jsonSource []byte, key string, value any, option Opti
 			if err := s.assertMax(key, parsedValue, &bags); option.AbortEarly && err != nil {
 				return bags, err
 			}
+
+			if s.Custom != nil {
+				if err := s.assertCustomValidation(s.Custom, jsonSource, parsedValue, &bags); option.AbortEarly && err != nil {
+					return bags, err
+				}
+			}
 		}
 
 	}
@@ -145,6 +153,28 @@ func (s Slice[T]) validate(jsonSource []byte, key string, value any, option Opti
 
 	return bags, nil
 
+}
+
+func (s Slice[T]) assertType(key string, values []any, bags *[]string) ([]T, error) {
+	failed := false
+	var parsedValues []T
+	for _, value := range values {
+		if parseValue, ok := value.(T); ok {
+			parsedValues = append(parsedValues, parseValue)
+		} else {
+			failed = true
+		}
+	}
+	if failed {
+		appendErrorBags(
+			bags,
+			fmt.Sprintf("%s must be slice of type %T", key, *new(T)),
+			"",
+		)
+		return []T{}, SliceValidationError
+	}
+
+	return parsedValues, nil
 }
 
 func (s Slice[T]) assertRequired(key string, value any, bags *[]string) error {
@@ -176,28 +206,6 @@ func (s Slice[T]) assertRequired(key string, value any, bags *[]string) error {
 		}
 	}
 	return nil
-}
-
-func (s Slice[T]) assertType(key string, values []any, bags *[]string) ([]T, error) {
-	failed := false
-	var parsedValues []T
-	for _, value := range values {
-		if parseValue, ok := value.(T); ok {
-			parsedValues = append(parsedValues, parseValue)
-		} else {
-			failed = true
-		}
-	}
-	if failed {
-		appendErrorBags(
-			bags,
-			fmt.Sprintf("%s must be slice of type %T", key, *new(T)),
-			"",
-		)
-		return []T{}, SliceValidationError
-	}
-
-	return parsedValues, nil
 }
 
 func (s Slice[T]) assertRequiredIf(jsonSource []byte, key string, value any, bags *[]string) error {
@@ -250,6 +258,21 @@ func (s Slice[T]) assertMax(key string, values []T, bags *[]string) error {
 			bags,
 			fmt.Sprintf("%s must be maximum of %d", key, s.Max),
 			s.Message.Max,
+		)
+		return SliceValidationError
+	}
+	return nil
+}
+
+func (s Slice[T]) assertCustomValidation(fc func(v []T, look Lookup) error, jsonSource []byte, value []T, bags *[]string) error {
+	err := fc(value, func(k string) gjson.Result {
+		return gjson.GetBytes(jsonSource, k)
+	})
+	if err != nil {
+		appendErrorBags(
+			bags,
+			err.Error(),
+			s.Message.Custom,
 		)
 		return SliceValidationError
 	}

@@ -47,7 +47,7 @@ func mapSchemas(jsonString []byte, pathKey string, key string, data any, schema 
 	} else {
 		if schemaRule, ok := isRule(schema); ok {
 			if schemaRule.isMyTypeOf(schema) {
-				schemaRule.process(RuleParams{
+				bags, err := schemaRule.process(RuleParams{
 					OriginalData: jsonString,
 					DataKey:      schemaData,
 					PathKey:      pathKey,
@@ -56,6 +56,12 @@ func mapSchemas(jsonString []byte, pathKey string, key string, data any, schema 
 					ErrorBags:    &errorBags,
 					Option:       option,
 				})
+				if err != nil {
+					errorBags.append(pathKey+key, bags)
+					if option.AbortEarly {
+						return
+					}
+				}
 			}
 		}
 	}

@@ -1,7 +1,6 @@
 package validet
 
 import (
-	"errors"
 	"fmt"
 	"reflect"
 
@@ -12,6 +11,7 @@ type ObjectErrorMessage struct {
 	Required       string
 	RequiredIf     string
 	RequiredUnless string
+	Custom         string
 }
 
 type Object struct {
@@ -19,6 +19,7 @@ type Object struct {
 	RequiredIf     *RequiredIf
 	RequiredUnless *RequiredUnless
 	Item           DataObject
+	Custom         func(v DataObject, look Lookup) error
 	Message        ObjectErrorMessage
 }
 
@@ -26,10 +27,10 @@ func (s Object) isMyTypeOf(schema any) bool {
 	return reflect.TypeOf(schema).Kind() == reflect.Struct && reflect.TypeOf(schema) == reflect.TypeOf(Object{})
 }
 
-func (s Object) process(params RuleParams) error {
+func (s Object) process(params RuleParams) ([]string, error) {
 	schemaData := params.DataKey.(DataObject)
-	var err error
-	var bags []string
+	// var err error
+	// var bags []string
 
 	errorBags := *params.ErrorBags
 	schema := params.Schema
@@ -40,26 +41,26 @@ func (s Object) process(params RuleParams) error {
 	if scObject, ok := schema.(Object); ok {
 		bags, err := scObject.validate(originalData, key, schemaData[key], options)
 		if err != nil {
-			errorBags.append(params.PathKey+key, bags)
+			return bags, err
 		} else {
 			schemaDataValue := schemaData[key].(DataObject)
 			for scObjItemKey, scObjItemValue := range scObject.Item {
 				mapSchemas(originalData, params.PathKey+key, scObjItemKey, schemaDataValue, scObjItemValue, &errorBags, options)
-				if options.AbortEarly && len(errorBags.Errors) > 0 {
-					return errors.New("error")
-				}
+				// if options.AbortEarly && len(errorBags.Errors) > 0 {
+				// 	return errors.New("error")
+				// }
 			}
 		}
 	}
 
-	pathKey := params.PathKey + key
-	if err != nil {
-		params.ErrorBags.append(pathKey, bags)
-		if options.AbortEarly {
-			return errors.New("error")
-		}
-	}
-	return nil
+	// pathKey := params.PathKey + key
+	// if err != nil {
+	// 	params.ErrorBags.append(pathKey, bags)
+	// 	if options.AbortEarly {
+	// 		return errors.New("error")
+	// 	}
+	// }
+	return []string{}, nil
 }
 
 func (s Object) validate(jsonSource []byte, key string, value any, option Options) ([]string, error) {
@@ -79,12 +80,43 @@ func (s Object) validate(jsonSource []byte, key string, value any, option Option
 		return bags, err
 	}
 
+	if value != nil {
+
+		parsedValue, err := s.assertType(key, value, &bags)
+
+		if err != nil {
+			return bags, err
+		}
+
+		if s.Custom != nil {
+			if err := s.assertCustomValidation(s.Custom, jsonSource, parsedValue, &bags); option.AbortEarly && err != nil {
+				return bags, err
+			}
+		}
+
+	}
+
 	if len(bags) > 0 {
 		return bags, ObjectValidationError
 	}
 
 	return bags, nil
 
+}
+
+func (s Object) assertType(key string, value any, bags *[]string) (DataObject, error) {
+	var objetcValue DataObject
+	if isObjectValue(value) {
+		objetcValue = value.(DataObject)
+	} else {
+		appendErrorBags(
+			bags,
+			fmt.Sprintf("%s must be type of object", key),
+			"",
+		)
+		return DataObject{}, StringValidationError
+	}
+	return objetcValue, nil
 }
 
 func (s Object) assertRequired(key string, value any, bags *[]string) error {
@@ -146,6 +178,21 @@ func (s Object) assertRequiredUnless(jsonSource []byte, key string, value any, b
 			)
 			return ObjectValidationError
 		}
+	}
+	return nil
+}
+
+func (s Object) assertCustomValidation(fc func(v DataObject, look Lookup) error, jsonSource []byte, value DataObject, bags *[]string) error {
+	err := fc(value, func(k string) gjson.Result {
+		return gjson.GetBytes(jsonSource, k)
+	})
+	if err != nil {
+		appendErrorBags(
+			bags,
+			err.Error(),
+			s.Message.Custom,
+		)
+		return ObjectValidationError
 	}
 	return nil
 }
