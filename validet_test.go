@@ -21,7 +21,7 @@ func (cs CustomString) isMyTypeOf(schema any) bool {
 
 func (cs CustomString) process(params RuleParams) ([]string, error) {
 	schemaData := params.DataKey.(DataObject)
-	return params.Schema.validate(params.OriginalData, params.Key, schemaData[params.Key], params.Option)
+	return cs.validate(params.OriginalData, params.Key, schemaData[params.Key], params.Option)
 }
 
 func TestValidate(t *testing.T) {
@@ -30,6 +30,7 @@ func TestValidate(t *testing.T) {
 		"new_name":    false,
 		"email":       "",
 		"description": "",
+		"store":       1,
 		"url":         "http://www.ada.com",
 		"information": DataObject{
 			"age":         1.2432,
@@ -60,7 +61,7 @@ func TestValidate(t *testing.T) {
 					Value:     "tono",
 				},
 			},
-			"store": Numeric[uint]{Required: true},
+			"store": Numeric[int64]{Required: true},
 			"information": Object{
 				Required: true,
 				Item: SchemaObject{
