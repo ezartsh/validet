@@ -52,7 +52,7 @@ func (s SliceObject) process(params RuleParams) ([]string, error) {
 			// 	return errors.New("new error")
 			// }
 		} else {
-			schemaDataValues := schemaData[key].([]DataObject)
+			schemaDataValues := schemaData[key].([]interface{})
 			for i, value := range schemaDataValues {
 				for scObjItemKey, scObjItemValue := range scSliceObject.Item {
 					mapSchemas(originalData, params.PathKey+key+"."+strconv.Itoa(i), scObjItemKey, value, scObjItemValue, &errorBags, options)
@@ -92,21 +92,24 @@ func (s SliceObject) validate(jsonSource []byte, key string, value any, option O
 	}
 
 	if value != nil {
-		values := value.([]DataObject)
 
-		if len(values) > 0 {
+		parsedValue, err := s.assertType(key, value, &bags)
 
-			parsedValue, err := s.assertType(key, values, &bags)
+		if err != nil {
+			return bags, err
+		}
+
+		if len(parsedValue) > 0 {
 
 			if err != nil {
 				return bags, err
 			}
 
-			if err := s.assertMin(key, values, &bags); option.AbortEarly && err != nil {
+			if err := s.assertMin(key, parsedValue, &bags); option.AbortEarly && err != nil {
 				return bags, err
 			}
 
-			if err := s.assertMax(key, values, &bags); option.AbortEarly && err != nil {
+			if err := s.assertMax(key, parsedValue, &bags); option.AbortEarly && err != nil {
 				return bags, err
 			}
 
@@ -155,8 +158,16 @@ func (s SliceObject) assertRequired(key string, value any, bags *[]string) error
 }
 
 func (s SliceObject) assertType(key string, value any, bags *[]string) ([]DataObject, error) {
-	if values, ok := value.([]DataObject); ok {
-		return values, nil
+	if values, ok := value.([]interface{}); ok {
+		sliceDataObject := []DataObject{}
+		for _, v := range values {
+			if value, ok := v.(DataObject); ok {
+				sliceDataObject = append(sliceDataObject, value)
+			}
+		}
+		if len(values) == len(sliceDataObject) {
+			return sliceDataObject, nil
+		}
 	}
 	appendErrorBags(
 		bags,
@@ -167,7 +178,7 @@ func (s SliceObject) assertType(key string, value any, bags *[]string) ([]DataOb
 }
 
 func (s SliceObject) assertRequiredIf(jsonSource []byte, key string, value any, bags *[]string) error {
-	values := value.([]DataObject)
+	values := value.([]interface{})
 	if s.RequiredIf != nil && (value == nil || len(values) == 0) {
 		comparedValue := gjson.GetBytes(jsonSource, s.RequiredIf.FieldPath)
 		if comparedValue.String() == s.RequiredIf.Value {
@@ -183,7 +194,7 @@ func (s SliceObject) assertRequiredIf(jsonSource []byte, key string, value any, 
 }
 
 func (s SliceObject) assertRequiredUnless(jsonSource []byte, key string, value any, bags *[]string) error {
-	values := value.([]DataObject)
+	values := value.([]interface{})
 	if s.RequiredUnless != nil && (value == nil || len(values) == 0) {
 		comparedValue := gjson.GetBytes(jsonSource, s.RequiredUnless.FieldPath)
 		if comparedValue.String() != s.RequiredUnless.Value {

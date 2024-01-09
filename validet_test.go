@@ -1,6 +1,7 @@
 package validet
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"reflect"
@@ -25,27 +26,56 @@ func (cs CustomString) process(params RuleParams) ([]string, error) {
 }
 
 func TestValidate(t *testing.T) {
-	data := DataObject{
+	jsonData := []byte(`{
 		"name":        "tono",
 		"new_name":    false,
 		"email":       "",
 		"description": "",
 		"store":       1,
 		"url":         "http://www.ada.com",
-		"information": DataObject{
+		"information": {
 			"age":         1.2432,
 			"description": "ada",
-			"job": DataObject{
-				"level": "",
+			"job": {
+				"level": ""
+			}
+		},
+		"tags": [1],
+		"items": [
+			{
+				"titles": "ada1"
 			},
-		},
-		"tags": []any{1},
-		"items": []DataObject{
-			{"titles": "ada", "collections": []DataObject{{"title": "ada"}}},
-		},
+			{
+				"titles": "ada2"
+			}
+		]
+	}`)
+	// data := DataObject{
+	// 	"name":        "tono",
+	// 	"new_name":    false,
+	// 	"email":       "",
+	// 	"description": "",
+	// 	"store":       1,
+	// 	"url":         "http://www.ada.com",
+	// 	"information": DataObject{
+	// 		"age":         1.2432,
+	// 		"description": "ada",
+	// 		"job": DataObject{
+	// 			"level": "",
+	// 		},
+	// 	},
+	// 	"tags": []any{1},
+	// 	"items": []map[string]interface{}{
+	// 		{"titles": "ada", "collections": []DataObject{{"title": "ada"}}},
+	// 	},
+	// }
+	request := map[string]interface{}{}
+	err := json.Unmarshal(jsonData, &request)
+	if err != nil {
+		fmt.Println(err.Error())
 	}
 	schema := NewSchema(
-		data,
+		request,
 		map[string]Rule{
 			"name":        String{Required: true, Min: 10, Message: StringErrorMessage{Required: "name dibutuhkan"}},
 			"new_name":    Boolean{Required: true},
