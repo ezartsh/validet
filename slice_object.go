@@ -24,7 +24,7 @@ type SliceObject struct {
 	Min            int
 	Max            int
 	Item           DataObject
-	Custom         func(v []DataObject, params RuleParams, look Lookup) error
+	Custom         func(v []DataObject, path PathKey, look Lookup) error
 	Message        SliceObjectErrorMessage
 }
 
@@ -117,7 +117,10 @@ func (s SliceObject) validate(jsonSource []byte, value any, params RuleParams) (
 			}
 
 			if s.Custom != nil {
-				if err := s.assertCustomValidation(s.Custom, jsonSource, parsedValue, params, &bags); option.AbortEarly && err != nil {
+				if err := s.assertCustomValidation(s.Custom, jsonSource, parsedValue, PathKey{
+					Previous: params.PathKey,
+					Current:  params.Key,
+				}, &bags); option.AbortEarly && err != nil {
 					return bags, err
 				}
 			}
@@ -236,8 +239,8 @@ func (s SliceObject) assertMax(key string, values []DataObject, bags *[]string) 
 	return nil
 }
 
-func (s SliceObject) assertCustomValidation(fc func(v []DataObject, params RuleParams, look Lookup) error, jsonSource []byte, value []DataObject, params RuleParams, bags *[]string) error {
-	err := fc(value, params, func(k string) gjson.Result {
+func (s SliceObject) assertCustomValidation(fc func(v []DataObject, path PathKey, look Lookup) error, jsonSource []byte, value []DataObject, path PathKey, bags *[]string) error {
+	err := fc(value, path, func(k string) gjson.Result {
 		return gjson.GetBytes(jsonSource, k)
 	})
 	if err != nil {

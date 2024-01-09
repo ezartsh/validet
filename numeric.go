@@ -42,7 +42,7 @@ type Numeric[NT NumericValue] struct {
 	NotRegex       string
 	In             []NT
 	NotIn          []NT
-	Custom         func(v NT, params RuleParams, look Lookup) error
+	Custom         func(v NT, path PathKey, look Lookup) error
 	Message        NumericErrorMessage
 }
 
@@ -176,7 +176,10 @@ func (s Numeric[NT]) validate(jsonSource []byte, value any, params RuleParams) (
 		}
 
 		if s.Custom != nil {
-			if err := s.assertCustomValidation(s.Custom, jsonSource, parsedValue, params, &bags); option.AbortEarly && err != nil {
+			if err := s.assertCustomValidation(s.Custom, jsonSource, parsedValue, PathKey{
+				Previous: params.PathKey,
+				Current:  params.Key,
+			}, &bags); option.AbortEarly && err != nil {
 				return bags, err
 			}
 		}
@@ -390,8 +393,8 @@ func (s Numeric[NT]) assertNotIn(key string, value NT, bags *[]string) error {
 	return nil
 }
 
-func (s Numeric[NT]) assertCustomValidation(fc func(v NT, params RuleParams, look Lookup) error, jsonSource []byte, value NT, params RuleParams, bags *[]string) error {
-	err := fc(value, params, func(k string) gjson.Result {
+func (s Numeric[NT]) assertCustomValidation(fc func(v NT, path PathKey, look Lookup) error, jsonSource []byte, value NT, path PathKey, bags *[]string) error {
+	err := fc(value, path, func(k string) gjson.Result {
 		return gjson.GetBytes(jsonSource, k)
 	})
 	if err != nil {

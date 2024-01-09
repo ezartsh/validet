@@ -14,6 +14,7 @@ type FileErrorMessage struct {
 	Max            string
 	Min            string
 	Mimes          string
+	Custom         string
 }
 
 type File struct {
@@ -23,11 +24,14 @@ type File struct {
 	Max            int64
 	Min            int64
 	Mimes          string
+	Custom         func(v multipart.FileHeader, path PathKey, look Lookup) error
 	Message        FileErrorMessage
 }
 
-func (s *File) validate(jsonSource string, key string, value any, option Options) ([]string, error) {
+func (s File) validate(source []byte, value any, params RuleParams) ([]string, error) {
 	var bags []string
+	key := params.Key
+	option := params.Option
 
 	err := s.assertRequired(key, value, &bags)
 
@@ -35,11 +39,11 @@ func (s *File) validate(jsonSource string, key string, value any, option Options
 		return bags, err
 	}
 
-	if err = s.assertRequiredIf(jsonSource, key, value, &bags); err != nil {
+	if err = s.assertRequiredIf(source, key, value, &bags); err != nil {
 		return bags, err
 	}
 
-	if err = s.assertRequiredUnless(jsonSource, key, value, &bags); err != nil {
+	if err = s.assertRequiredUnless(source, key, value, &bags); err != nil {
 		return bags, err
 	}
 
@@ -57,6 +61,15 @@ func (s *File) validate(jsonSource string, key string, value any, option Options
 		if err := s.assertMax(key, parsedValue, &bags); option.AbortEarly && err != nil {
 			return bags, err
 		}
+
+		if s.Custom != nil {
+			if err := s.assertCustomValidation(s.Custom, source, parsedValue, PathKey{
+				Previous: params.PathKey,
+				Current:  params.Key,
+			}, &bags); option.AbortEarly && err != nil {
+				return bags, err
+			}
+		}
 	}
 
 	if len(bags) > 0 {
@@ -67,7 +80,7 @@ func (s *File) validate(jsonSource string, key string, value any, option Options
 
 }
 
-func (s *File) assertRequired(key string, value any, bags *[]string) error {
+func (s File) assertRequired(key string, value any, bags *[]string) error {
 	if s.Required {
 		if value == nil {
 			appendErrorBags(
@@ -81,7 +94,7 @@ func (s *File) assertRequired(key string, value any, bags *[]string) error {
 	return nil
 }
 
-func (s *File) assertType(key string, value any, bags *[]string) (multipart.FileHeader, error) {
+func (s File) assertType(key string, value any, bags *[]string) (multipart.FileHeader, error) {
 	if parsedValue, ok := value.(multipart.FileHeader); ok {
 		return parsedValue, nil
 	}
@@ -94,9 +107,9 @@ func (s *File) assertType(key string, value any, bags *[]string) (multipart.File
 	return multipart.FileHeader{}, FileValidationError
 }
 
-func (s *File) assertRequiredIf(jsonSource string, key string, value any, bags *[]string) error {
+func (s File) assertRequiredIf(jsonSource []byte, key string, value any, bags *[]string) error {
 	if s.RequiredIf != nil && value == nil {
-		comparedValue := gjson.Get(jsonSource, s.RequiredIf.FieldPath)
+		comparedValue := gjson.GetBytes(jsonSource, s.RequiredIf.FieldPath)
 		if comparedValue.String() == s.RequiredIf.Value {
 			appendErrorBags(
 				bags,
@@ -109,9 +122,9 @@ func (s *File) assertRequiredIf(jsonSource string, key string, value any, bags *
 	return nil
 }
 
-func (s *File) assertRequiredUnless(jsonSource string, key string, value any, bags *[]string) error {
+func (s File) assertRequiredUnless(jsonSource []byte, key string, value any, bags *[]string) error {
 	if s.RequiredUnless != nil && value == nil {
-		comparedValue := gjson.Get(jsonSource, s.RequiredUnless.FieldPath)
+		comparedValue := gjson.GetBytes(jsonSource, s.RequiredUnless.FieldPath)
 		if comparedValue.String() != s.RequiredUnless.Value {
 			appendErrorBags(
 				bags,
@@ -124,7 +137,7 @@ func (s *File) assertRequiredUnless(jsonSource string, key string, value any, ba
 	return nil
 }
 
-func (s *File) assertMin(key string, value multipart.FileHeader, bags *[]string) error {
+func (s File) assertMin(key string, value multipart.FileHeader, bags *[]string) error {
 	if value.Size < s.Min {
 		appendErrorBags(
 			bags,
@@ -136,12 +149,27 @@ func (s *File) assertMin(key string, value multipart.FileHeader, bags *[]string)
 	return nil
 }
 
-func (s *File) assertMax(key string, value multipart.FileHeader, bags *[]string) error {
+func (s File) assertMax(key string, value multipart.FileHeader, bags *[]string) error {
 	if value.Size > s.Max {
 		appendErrorBags(
 			bags,
 			fmt.Sprintf("%s size must be at maximum %d", key, s.Max),
 			s.Message.Max,
+		)
+		return FileValidationError
+	}
+	return nil
+}
+
+func (s File) assertCustomValidation(fc func(v multipart.FileHeader, path PathKey, look Lookup) error, jsonSource []byte, value multipart.FileHeader, path PathKey, bags *[]string) error {
+	err := fc(value, path, func(k string) gjson.Result {
+		return gjson.GetBytes(jsonSource, k)
+	})
+	if err != nil {
+		appendErrorBags(
+			bags,
+			err.Error(),
+			s.Message.Custom,
 		)
 		return FileValidationError
 	}
