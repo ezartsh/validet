@@ -18,7 +18,7 @@ type Boolean struct {
 	Required       bool
 	RequiredIf     *RequiredIf
 	RequiredUnless *RequiredUnless
-	Custom         func(v bool, look Lookup) error
+	Custom         func(v bool, path PathKey, look Lookup) error
 	Message        BooleanErrorMessage
 }
 
@@ -29,7 +29,7 @@ func (s Boolean) isMyTypeOf(schema any) bool {
 func (s Boolean) process(params RuleParams) ([]string, error) {
 	// errorBags := params.ErrorBags
 	schemaData := params.DataKey.(DataObject)
-	return params.Schema.validate(params.OriginalData, params.Key, schemaData[params.Key], params.Option)
+	return params.Schema.validate(params.OriginalData, schemaData[params.Key], params)
 	// pathKey := params.PathKey + params.Key
 	// if err != nil {
 	// 	errorBags.append(pathKey, bags)
@@ -40,8 +40,11 @@ func (s Boolean) process(params RuleParams) ([]string, error) {
 	// return nil
 }
 
-func (s Boolean) validate(source []byte, key string, value any, option Options) ([]string, error) {
+func (s Boolean) validate(source []byte, value any, params RuleParams) ([]string, error) {
 	var bags []string
+	key := params.Key
+	option := params.Option
+
 	err := s.assertRequired(key, value, &bags)
 
 	if err != nil {
@@ -65,7 +68,10 @@ func (s Boolean) validate(source []byte, key string, value any, option Options) 
 		}
 
 		if s.Custom != nil {
-			if err := s.assertCustomValidation(s.Custom, source, stringValue, &bags); option.AbortEarly && err != nil {
+			if err := s.assertCustomValidation(s.Custom, source, stringValue, PathKey{
+				Previous: params.PathKey,
+				Current:  params.Key,
+			}, &bags); option.AbortEarly && err != nil {
 				return bags, err
 			}
 		}
@@ -138,8 +144,8 @@ func (s Boolean) assertRequiredUnless(jsonSource []byte, key string, value any, 
 	return nil
 }
 
-func (s Boolean) assertCustomValidation(fc func(v bool, look Lookup) error, jsonSource []byte, value any, bags *[]string) error {
-	err := fc(value.(bool), func(k string) gjson.Result {
+func (s Boolean) assertCustomValidation(fc func(v bool, path PathKey, look Lookup) error, jsonSource []byte, value any, path PathKey, bags *[]string) error {
+	err := fc(value.(bool), path, func(k string) gjson.Result {
 		return gjson.GetBytes(jsonSource, k)
 	})
 	if err != nil {

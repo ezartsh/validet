@@ -19,7 +19,7 @@ type Object struct {
 	RequiredIf     *RequiredIf
 	RequiredUnless *RequiredUnless
 	Item           DataObject
-	Custom         func(v DataObject, look Lookup) error
+	Custom         func(v DataObject, params RuleParams, look Lookup) error
 	Message        ObjectErrorMessage
 }
 
@@ -39,13 +39,21 @@ func (s Object) process(params RuleParams) ([]string, error) {
 	options := params.Option
 
 	if scObject, ok := schema.(Object); ok {
-		bags, err := scObject.validate(originalData, key, schemaData[key], options)
+		bags, err := scObject.validate(originalData, schemaData[key], params)
 		if err != nil {
 			return bags, err
 		} else {
 			schemaDataValue := schemaData[key].(DataObject)
 			for scObjItemKey, scObjItemValue := range scObject.Item {
-				mapSchemas(originalData, params.PathKey+key, scObjItemKey, schemaDataValue, scObjItemValue, &errorBags, options)
+				mapSchemas(
+					originalData,
+					append(params.PathKey, key),
+					scObjItemKey,
+					schemaDataValue,
+					scObjItemValue,
+					&errorBags,
+					options,
+				)
 				// if options.AbortEarly && len(errorBags.Errors) > 0 {
 				// 	return errors.New("error")
 				// }
@@ -63,8 +71,11 @@ func (s Object) process(params RuleParams) ([]string, error) {
 	return []string{}, nil
 }
 
-func (s Object) validate(jsonSource []byte, key string, value any, option Options) ([]string, error) {
+func (s Object) validate(jsonSource []byte, value any, params RuleParams) ([]string, error) {
 	var bags []string
+
+	key := params.Key
+	option := params.Option
 
 	err := s.assertRequired(key, value, &bags)
 
@@ -89,7 +100,7 @@ func (s Object) validate(jsonSource []byte, key string, value any, option Option
 		}
 
 		if s.Custom != nil {
-			if err := s.assertCustomValidation(s.Custom, jsonSource, parsedValue, &bags); option.AbortEarly && err != nil {
+			if err := s.assertCustomValidation(s.Custom, jsonSource, parsedValue, params, &bags); option.AbortEarly && err != nil {
 				return bags, err
 			}
 		}
@@ -182,8 +193,8 @@ func (s Object) assertRequiredUnless(jsonSource []byte, key string, value any, b
 	return nil
 }
 
-func (s Object) assertCustomValidation(fc func(v DataObject, look Lookup) error, jsonSource []byte, value DataObject, bags *[]string) error {
-	err := fc(value, func(k string) gjson.Result {
+func (s Object) assertCustomValidation(fc func(v DataObject, params RuleParams, look Lookup) error, jsonSource []byte, value DataObject, params RuleParams, bags *[]string) error {
+	err := fc(value, params, func(k string) gjson.Result {
 		return gjson.GetBytes(jsonSource, k)
 	})
 	if err != nil {

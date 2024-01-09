@@ -26,7 +26,7 @@ type Slice[T SliceValueType] struct {
 	RequiredUnless *RequiredUnless
 	Min            int
 	Max            int
-	Custom         func(v []T, look Lookup) error
+	Custom         func(v []T, params RuleParams, look Lookup) error
 	Message        SliceErrorMessage
 }
 
@@ -50,44 +50,43 @@ func (s Slice[T]) process(params RuleParams) ([]string, error) {
 	schema := params.Schema
 	originalData := params.OriginalData
 	key := params.Key
-	options := params.Option
 
 	switch reflect.TypeOf(schema) {
 	case reflect.TypeOf(Slice[string]{}):
 		if scMap, ok := schema.(Slice[string]); ok {
-			bags, err = scMap.validate(originalData, key, schemaData[key], options)
+			bags, err = scMap.validate(originalData, schemaData[key], params)
 		}
 	case reflect.TypeOf(Slice[int]{}):
 		if scMap, ok := schema.(Slice[int]); ok {
-			bags, err = scMap.validate(originalData, key, schemaData[key], options)
+			bags, err = scMap.validate(originalData, schemaData[key], params)
 		}
 	case reflect.TypeOf(Slice[int32]{}):
 		if scMap, ok := schema.(Slice[int32]); ok {
-			bags, err = scMap.validate(originalData, key, schemaData[key], options)
+			bags, err = scMap.validate(originalData, schemaData[key], params)
 		}
 	case reflect.TypeOf(Slice[int64]{}):
 		if scMap, ok := schema.(Slice[int64]); ok {
-			bags, err = scMap.validate(originalData, key, schemaData[key], options)
+			bags, err = scMap.validate(originalData, schemaData[key], params)
 		}
 	case reflect.TypeOf(Slice[uint]{}):
 		if scMap, ok := schema.(Slice[uint]); ok {
-			bags, err = scMap.validate(originalData, key, schemaData[key], options)
+			bags, err = scMap.validate(originalData, schemaData[key], params)
 		}
 	case reflect.TypeOf(Slice[uint32]{}):
 		if scMap, ok := schema.(Slice[uint32]); ok {
-			bags, err = scMap.validate(originalData, key, schemaData[key], options)
+			bags, err = scMap.validate(originalData, schemaData[key], params)
 		}
 	case reflect.TypeOf(Slice[uint64]{}):
 		if scMap, ok := schema.(Slice[uint64]); ok {
-			bags, err = scMap.validate(originalData, key, schemaData[key], options)
+			bags, err = scMap.validate(originalData, schemaData[key], params)
 		}
 	case reflect.TypeOf(Slice[float32]{}):
 		if scMap, ok := schema.(Slice[float32]); ok {
-			bags, err = scMap.validate(originalData, key, schemaData[key], options)
+			bags, err = scMap.validate(originalData, schemaData[key], params)
 		}
 	case reflect.TypeOf(Slice[float64]{}):
 		if scMap, ok := schema.(Slice[float64]); ok {
-			bags, err = scMap.validate(originalData, key, schemaData[key], options)
+			bags, err = scMap.validate(originalData, schemaData[key], params)
 		}
 	}
 
@@ -103,8 +102,10 @@ func (s Slice[T]) process(params RuleParams) ([]string, error) {
 	// return []string{}, nil
 }
 
-func (s Slice[T]) validate(jsonSource []byte, key string, value any, option Options) ([]string, error) {
+func (s Slice[T]) validate(jsonSource []byte, value any, params RuleParams) ([]string, error) {
 	var bags []string
+	key := params.Key
+	option := params.Option
 
 	err := s.assertRequired(key, value, &bags)
 
@@ -139,7 +140,7 @@ func (s Slice[T]) validate(jsonSource []byte, key string, value any, option Opti
 			}
 
 			if s.Custom != nil {
-				if err := s.assertCustomValidation(s.Custom, jsonSource, parsedValue, &bags); option.AbortEarly && err != nil {
+				if err := s.assertCustomValidation(s.Custom, jsonSource, parsedValue, params, &bags); option.AbortEarly && err != nil {
 					return bags, err
 				}
 			}
@@ -264,8 +265,8 @@ func (s Slice[T]) assertMax(key string, values []T, bags *[]string) error {
 	return nil
 }
 
-func (s Slice[T]) assertCustomValidation(fc func(v []T, look Lookup) error, jsonSource []byte, value []T, bags *[]string) error {
-	err := fc(value, func(k string) gjson.Result {
+func (s Slice[T]) assertCustomValidation(fc func(v []T, params RuleParams, look Lookup) error, jsonSource []byte, value []T, params RuleParams, bags *[]string) error {
+	err := fc(value, params, func(k string) gjson.Result {
 		return gjson.GetBytes(jsonSource, k)
 	})
 	if err != nil {

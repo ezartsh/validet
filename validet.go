@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"reflect"
+	"strings"
 )
 
 type Options struct {
@@ -25,15 +26,11 @@ func (v *Validation) check(b *ErrorBag) {
 		jsonData = []byte{}
 	}
 
-	mapSchemas(jsonData, "", "", v.data, v.schema, &errorBags, v.options)
+	mapSchemas(jsonData, []string{}, "", v.data, v.schema, &errorBags, v.options)
 }
 
-func mapSchemas(jsonString []byte, pathKey string, key string, data any, schema any, b *ErrorBag, option Options) {
+func mapSchemas(jsonString []byte, pathKey []string, key string, data any, schema any, b *ErrorBag, option Options) {
 	errorBags := *b
-
-	if pathKey != "" {
-		pathKey = pathKey + "."
-	}
 
 	schemaData := data.(DataObject)
 	if isSchemaRule(schema) {
@@ -57,7 +54,8 @@ func mapSchemas(jsonString []byte, pathKey string, key string, data any, schema 
 					Option:       option,
 				})
 				if err != nil {
-					errorBags.append(pathKey+key, bags)
+					path := append(pathKey, key)
+					errorBags.append(strings.Join(path, "."), bags)
 					if option.AbortEarly {
 						return
 					}

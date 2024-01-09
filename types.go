@@ -12,6 +12,11 @@ type SchemaObject = map[string]any
 
 type SchemaSliceObject = []SchemaObject
 
+type PathKey struct {
+	Previous []string
+	Current  string
+}
+
 type RequiredIf struct {
 	FieldPath string
 	Value     any

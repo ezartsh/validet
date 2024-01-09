@@ -3,7 +3,7 @@ package validet
 type RuleParams struct {
 	OriginalData []byte
 	DataKey      any
-	PathKey      string
+	PathKey      []string
 	Key          string
 	Schema       Rule
 	ErrorBags    *ErrorBag
@@ -11,7 +11,7 @@ type RuleParams struct {
 }
 
 type Rule interface {
-	validate(source []byte, key string, value any, option Options) ([]string, error)
+	validate(source []byte, value any, params RuleParams) ([]string, error)
 	isMyTypeOf(schema any) bool
 	process(RuleParams) ([]string, error)
 }

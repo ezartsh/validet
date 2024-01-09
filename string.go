@@ -41,7 +41,7 @@ type String struct {
 	Alpha          bool
 	AlphaNumeric   bool
 	Url            *Url
-	Custom         func(v string, look Lookup) error
+	Custom         func(v string, path PathKey, look Lookup) error
 	Message        StringErrorMessage
 }
 
@@ -62,7 +62,7 @@ func (s String) isMyTypeOf(schema any) bool {
 func (s String) process(params RuleParams) ([]string, error) {
 	// errorBags := params.ErrorBags
 	schemaData := params.DataKey.(DataObject)
-	return params.Schema.validate(params.OriginalData, params.Key, schemaData[params.Key], params.Option)
+	return params.Schema.validate(params.OriginalData, schemaData[params.Key], params)
 	// pathKey := params.PathKey + params.Key
 	// if err != nil {
 	// 	errorBags.append(pathKey, bags)
@@ -73,15 +73,18 @@ func (s String) process(params RuleParams) ([]string, error) {
 	// return nil
 }
 
-func (s String) validate(source []byte, key string, value any, option Options) ([]string, error) {
+func (s String) validate(source []byte, value any, params RuleParams) ([]string, error) {
 	var bags []string
+	key := params.Key
+	option := params.Option
+
 	err := s.assertRequired(key, value, &bags)
 
 	if err != nil {
 		return bags, err
 	}
 
-	if err = s.assertRequiredIf(source, key, value, &bags); err != nil {
+	if err = s.assertRequiredIf(source, key, value, params, &bags); err != nil {
 		return bags, err
 	}
 
@@ -138,7 +141,10 @@ func (s String) validate(source []byte, key string, value any, option Options) (
 		}
 
 		if s.Custom != nil {
-			if err := s.assertCustomValidation(s.Custom, source, stringValue, &bags); option.AbortEarly && err != nil {
+			if err := s.assertCustomValidation(s.Custom, source, stringValue, PathKey{
+				Previous: params.PathKey,
+				Current:  params.Key,
+			}, &bags); option.AbortEarly && err != nil {
 				return bags, err
 			}
 		}
@@ -191,7 +197,7 @@ func (s String) assertRequired(key string, value any, bags *[]string) error {
 	return nil
 }
 
-func (s String) assertRequiredIf(jsonSource []byte, key string, value any, bags *[]string) error {
+func (s String) assertRequiredIf(jsonSource []byte, key string, value any, params RuleParams, bags *[]string) error {
 	if s.RequiredIf != nil && (value == nil || (isStringValue(value) && stringLength(value) == 0)) {
 		comparedValue := gjson.GetBytes(jsonSource, s.RequiredIf.FieldPath)
 		if comparedValue.String() == s.RequiredIf.Value {
@@ -362,8 +368,8 @@ func (s String) assertUrl(key string, value string, bags *[]string) error {
 	return nil
 }
 
-func (s String) assertCustomValidation(fc func(v string, look Lookup) error, jsonSource []byte, value any, bags *[]string) error {
-	err := fc(value.(string), func(k string) gjson.Result {
+func (s String) assertCustomValidation(fc func(v string, path PathKey, look Lookup) error, jsonSource []byte, value any, path PathKey, bags *[]string) error {
+	err := fc(value.(string), path, func(k string) gjson.Result {
 		return gjson.GetBytes(jsonSource, k)
 	})
 	if err != nil {

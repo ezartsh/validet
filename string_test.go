@@ -10,21 +10,21 @@ import (
 func Test_String_Required(t *testing.T) {
 	t.Run("it should error when the property is not exist", func(t *testing.T) {
 		schema := String{Required: true}
-		_, err := schema.validate([]byte{}, "test", "", Options{})
+		_, err := schema.validate([]byte{}, "", RuleParams{Key: "test"})
 		if !errors.Is(err, StringValidationError) {
 			t.Errorf("Actual = %v, Expected = %v", err, StringValidationError)
 		}
 	})
 	t.Run("it should error when the property value is null", func(t *testing.T) {
 		schema := String{Required: true}
-		_, err := schema.validate([]byte{}, "test", nil, Options{})
+		_, err := schema.validate([]byte{}, nil, RuleParams{Key: "test"})
 		if !errors.Is(err, StringValidationError) {
 			t.Errorf("Actual = %v, Expected = %v", err, StringValidationError)
 		}
 	})
 	t.Run("it should error when the property value is empty string", func(t *testing.T) {
 		schema := String{Required: true}
-		_, err := schema.validate([]byte{}, "test", "", Options{})
+		_, err := schema.validate([]byte{}, "", RuleParams{Key: "test"})
 		if !errors.Is(err, StringValidationError) {
 			t.Errorf("Actual = %v, Expected = %v", err, StringValidationError)
 		}
@@ -34,7 +34,7 @@ func Test_String_Required(t *testing.T) {
 func Test_String_Value_Type(t *testing.T) {
 	t.Run("it should error when the property value is not a string", func(t *testing.T) {
 		schema := String{Required: true}
-		_, err := schema.validate([]byte{}, "test", 123, Options{})
+		_, err := schema.validate([]byte{}, 123, RuleParams{Key: "test"})
 		if !errors.Is(err, StringValidationError) {
 			t.Errorf("Actual = %v, Expected = %v", err, StringValidationError)
 		}
@@ -52,7 +52,7 @@ func Test_String_RequiredIf(t *testing.T) {
 			FieldPath: "test_1",
 			Value:     "x",
 		}}
-		_, err := schema.validate(jsonBytes, "test", "", Options{})
+		_, err := schema.validate(jsonBytes, "", RuleParams{Key: "test"})
 		if !errors.Is(err, StringValidationError) {
 			t.Errorf("Actual = %v, Expected = %v", err, StringValidationError)
 		}
@@ -67,7 +67,7 @@ func Test_String_RequiredIf(t *testing.T) {
 			FieldPath: "test_1",
 			Value:     "x",
 		}}
-		_, err := schema.validate(jsonBytes, "test", "", Options{})
+		_, err := schema.validate(jsonBytes, "", RuleParams{Key: "test"})
 		if errors.Is(err, StringValidationError) {
 			t.Errorf("Actual = %v, Expected = %v", err, nil)
 		}
@@ -85,7 +85,7 @@ func Test_String_RequiredUnless(t *testing.T) {
 			FieldPath: "test_1",
 			Value:     "x",
 		}}
-		_, err := schema.validate(jsonBytes, "test", "", Options{})
+		_, err := schema.validate(jsonBytes, "", RuleParams{Key: "test"})
 		if !errors.Is(err, StringValidationError) {
 			t.Errorf("Actual = %v, Expected = %v", err, StringValidationError)
 		}
@@ -100,7 +100,7 @@ func Test_String_RequiredUnless(t *testing.T) {
 			FieldPath: "test_1",
 			Value:     "x",
 		}}
-		_, err := schema.validate(jsonBytes, "test", "", Options{})
+		_, err := schema.validate(jsonBytes, "", RuleParams{Key: "test"})
 		if errors.Is(err, StringValidationError) {
 			t.Errorf("Actual = %v, Expected = %v", err, nil)
 		}
@@ -110,7 +110,7 @@ func Test_String_RequiredUnless(t *testing.T) {
 func Test_String_Min(t *testing.T) {
 	t.Run("it should error when the length of property value is not bigger than or equal to x", func(t *testing.T) {
 		schema := String{Min: 2}
-		_, err := schema.validate([]byte{}, "test", "x", Options{})
+		_, err := schema.validate([]byte{}, "x", RuleParams{Key: "test"})
 		if !errors.Is(err, StringValidationError) {
 			t.Errorf("Actual = %v, Expected = %v", err, StringValidationError)
 		}
@@ -120,7 +120,7 @@ func Test_String_Min(t *testing.T) {
 func Test_String_Max(t *testing.T) {
 	t.Run("it should error when the length of property value is not less than or equal to x", func(t *testing.T) {
 		schema := String{Max: 2}
-		_, err := schema.validate([]byte{}, "test", "xxxx", Options{})
+		_, err := schema.validate([]byte{}, "xxxx", RuleParams{Key: "test"})
 		if !errors.Is(err, StringValidationError) {
 			t.Errorf("Actual = %v, Expected = %v", err, StringValidationError)
 		}
@@ -130,7 +130,7 @@ func Test_String_Max(t *testing.T) {
 func Test_String_Regex(t *testing.T) {
 	t.Run("it should error when the property value is not match the expression", func(t *testing.T) {
 		schema := String{Regex: "^test$"}
-		_, err := schema.validate([]byte{}, "test", "test2", Options{})
+		_, err := schema.validate([]byte{}, "test2", RuleParams{Key: "test"})
 		if !errors.Is(err, StringValidationError) {
 			t.Errorf("Actual = %v, Expected = %v", err, StringValidationError)
 		}
@@ -140,7 +140,7 @@ func Test_String_Regex(t *testing.T) {
 func Test_String_NotRegex(t *testing.T) {
 	t.Run("it should error when the property value is match the expression", func(t *testing.T) {
 		schema := String{NotRegex: "^test$"}
-		_, err := schema.validate([]byte{}, "test", "test", Options{})
+		_, err := schema.validate([]byte{}, "test", RuleParams{Key: "test"})
 		if !errors.Is(err, StringValidationError) {
 			t.Errorf("Actual = %v, Expected = %v", err, StringValidationError)
 		}
@@ -150,7 +150,7 @@ func Test_String_NotRegex(t *testing.T) {
 func Test_String_In(t *testing.T) {
 	t.Run("it should error when the property value is not on the list", func(t *testing.T) {
 		schema := String{In: []string{"one", "two", "three"}}
-		_, err := schema.validate([]byte{}, "test", "four", Options{})
+		_, err := schema.validate([]byte{}, "four", RuleParams{Key: "test"})
 		if !errors.Is(err, StringValidationError) {
 			t.Errorf("Actual = %v, Expected = %v", err, StringValidationError)
 		}
@@ -160,7 +160,7 @@ func Test_String_In(t *testing.T) {
 func Test_String_NotIn(t *testing.T) {
 	t.Run("it should error when the property value is on the list", func(t *testing.T) {
 		schema := String{NotIn: []string{"one", "two", "three"}}
-		_, err := schema.validate([]byte{}, "test", "one", Options{})
+		_, err := schema.validate([]byte{}, "one", RuleParams{Key: "test"})
 		if !errors.Is(err, StringValidationError) {
 			t.Errorf("Actual = %v, Expected = %v", err, StringValidationError)
 		}
@@ -177,7 +177,7 @@ func Test_String_Email(t *testing.T) {
 	for _, cs := range cases {
 		t.Run("it should error when the property value is not valid email e.g "+cs, func(t *testing.T) {
 			schema := String{Email: true}
-			_, err := schema.validate([]byte{}, "test", cs, Options{})
+			_, err := schema.validate([]byte{}, cs, RuleParams{Key: "test"})
 			if !errors.Is(err, StringValidationError) {
 				t.Errorf("Actual = %v, Expected = %v", err, StringValidationError)
 			}
@@ -188,7 +188,7 @@ func Test_String_Email(t *testing.T) {
 func Test_String_Alpha(t *testing.T) {
 	t.Run("it should error when the property value is not alphabetical", func(t *testing.T) {
 		schema := String{Alpha: true}
-		_, err := schema.validate([]byte{}, "test", "test123", Options{})
+		_, err := schema.validate([]byte{}, "test123", RuleParams{Key: "test"})
 		if !errors.Is(err, StringValidationError) {
 			t.Errorf("Actual = %v, Expected = %v", err, StringValidationError)
 		}
@@ -198,7 +198,7 @@ func Test_String_Alpha(t *testing.T) {
 func Test_String_AlphaNumeric(t *testing.T) {
 	t.Run("it should error when the property value is not alphabetical and numeric", func(t *testing.T) {
 		schema := String{AlphaNumeric: true}
-		_, err := schema.validate([]byte{}, "test", "_test_", Options{})
+		_, err := schema.validate([]byte{}, "_test_", RuleParams{Key: "test"})
 		if !errors.Is(err, StringValidationError) {
 			t.Errorf("Actual = %v, Expected = %v", err, StringValidationError)
 		}
@@ -215,7 +215,7 @@ func Test_String_Url(t *testing.T) {
 	for _, cs := range cases {
 		t.Run("it should error when the property value is not valid url e.g "+cs, func(t *testing.T) {
 			schema := String{Url: &Url{Http: true, Https: true}}
-			_, err := schema.validate([]byte{}, "test", cs, Options{})
+			_, err := schema.validate([]byte{}, cs, RuleParams{Key: "test"})
 			if !errors.Is(err, StringValidationError) {
 				t.Errorf("Actual = %v, Expected = %v", err, StringValidationError)
 			}
@@ -225,10 +225,10 @@ func Test_String_Url(t *testing.T) {
 
 func Test_String_Custom_Validation(t *testing.T) {
 	t.Run("it should error when the custom validation return error", func(t *testing.T) {
-		schema := String{Custom: func(v string, look Lookup) error {
+		schema := String{Custom: func(v string, _ PathKey, look Lookup) error {
 			return StringValidationError
 		}}
-		_, err := schema.validate([]byte{}, "test", "_test_", Options{})
+		_, err := schema.validate([]byte{}, "_test_", RuleParams{Key: "test"})
 		if !errors.Is(err, StringValidationError) {
 			t.Errorf("Actual = %v, Expected = %v", err, StringValidationError)
 		}
@@ -238,7 +238,7 @@ func Test_String_Custom_Validation(t *testing.T) {
 func Test_String_Custom_Message(t *testing.T) {
 	t.Run("it should return custom message error when the custom message is configured.", func(t *testing.T) {
 		schema := String{Min: 5, Message: StringErrorMessage{Min: "minimum 2"}}
-		bags, _ := schema.validate([]byte{}, "test", "tst", Options{})
+		bags, _ := schema.validate([]byte{}, "tst", RuleParams{Key: "test"})
 		if !slices.Contains(bags, "minimum 2") {
 			t.Fatalf("Actual = %v, Expected contain = minimum 2", bags)
 		}

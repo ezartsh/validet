@@ -24,7 +24,7 @@ type SliceObject struct {
 	Min            int
 	Max            int
 	Item           DataObject
-	Custom         func(v []DataObject, look Lookup) error
+	Custom         func(v []DataObject, params RuleParams, look Lookup) error
 	Message        SliceObjectErrorMessage
 }
 
@@ -44,7 +44,7 @@ func (s SliceObject) process(params RuleParams) ([]string, error) {
 	options := params.Option
 
 	if scSliceObject, ok := schema.(SliceObject); ok {
-		bags, err := scSliceObject.validate(originalData, key, schemaData[key], options)
+		bags, err := scSliceObject.validate(originalData, schemaData[key], params)
 		if err != nil {
 			return bags, err
 			// errorBags.append(params.PathKey+key, bags)
@@ -55,7 +55,8 @@ func (s SliceObject) process(params RuleParams) ([]string, error) {
 			schemaDataValues := schemaData[key].([]interface{})
 			for i, value := range schemaDataValues {
 				for scObjItemKey, scObjItemValue := range scSliceObject.Item {
-					mapSchemas(originalData, params.PathKey+key+"."+strconv.Itoa(i), scObjItemKey, value, scObjItemValue, &errorBags, options)
+					path := append(params.PathKey, key)
+					mapSchemas(originalData, append(path, strconv.Itoa(i)), scObjItemKey, value, scObjItemValue, &errorBags, options)
 					// if options.AbortEarly && len(errorBags.Errors) > 0 {
 					// 	return errors.New("new error")
 					// }
@@ -74,8 +75,10 @@ func (s SliceObject) process(params RuleParams) ([]string, error) {
 	return []string{}, nil
 }
 
-func (s SliceObject) validate(jsonSource []byte, key string, value any, option Options) ([]string, error) {
+func (s SliceObject) validate(jsonSource []byte, value any, params RuleParams) ([]string, error) {
 	var bags []string
+	key := params.Key
+	option := params.Option
 
 	err := s.assertRequired(key, value, &bags)
 
@@ -114,7 +117,7 @@ func (s SliceObject) validate(jsonSource []byte, key string, value any, option O
 			}
 
 			if s.Custom != nil {
-				if err := s.assertCustomValidation(s.Custom, jsonSource, parsedValue, &bags); option.AbortEarly && err != nil {
+				if err := s.assertCustomValidation(s.Custom, jsonSource, parsedValue, params, &bags); option.AbortEarly && err != nil {
 					return bags, err
 				}
 			}
@@ -233,8 +236,8 @@ func (s SliceObject) assertMax(key string, values []DataObject, bags *[]string) 
 	return nil
 }
 
-func (s SliceObject) assertCustomValidation(fc func(v []DataObject, look Lookup) error, jsonSource []byte, value []DataObject, bags *[]string) error {
-	err := fc(value, func(k string) gjson.Result {
+func (s SliceObject) assertCustomValidation(fc func(v []DataObject, params RuleParams, look Lookup) error, jsonSource []byte, value []DataObject, params RuleParams, bags *[]string) error {
+	err := fc(value, params, func(k string) gjson.Result {
 		return gjson.GetBytes(jsonSource, k)
 	})
 	if err != nil {

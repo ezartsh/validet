@@ -42,7 +42,7 @@ type Numeric[NT NumericValue] struct {
 	NotRegex       string
 	In             []NT
 	NotIn          []NT
-	Custom         func(v NT, look Lookup) error
+	Custom         func(v NT, params RuleParams, look Lookup) error
 	Message        NumericErrorMessage
 }
 
@@ -66,40 +66,39 @@ func (s Numeric[NT]) process(params RuleParams) ([]string, error) {
 	schema := params.Schema
 	originalData := params.OriginalData
 	key := params.Key
-	options := params.Option
 
 	switch reflect.TypeOf(schema) {
 	case reflect.TypeOf(Numeric[int]{}):
 		if scMap, ok := schema.(Numeric[int]); ok {
-			bags, err = scMap.validate(originalData, key, schemaData[key], options)
+			bags, err = scMap.validate(originalData, schemaData[key], params)
 		}
 	case reflect.TypeOf(Numeric[int32]{}):
 		if scMap, ok := schema.(Numeric[int32]); ok {
-			bags, err = scMap.validate(originalData, key, schemaData[key], options)
+			bags, err = scMap.validate(originalData, schemaData[key], params)
 		}
 	case reflect.TypeOf(Numeric[int64]{}):
 		if scMap, ok := schema.(Numeric[int64]); ok {
-			bags, err = scMap.validate(originalData, key, schemaData[key], options)
+			bags, err = scMap.validate(originalData, schemaData[key], params)
 		}
 	case reflect.TypeOf(Numeric[uint]{}):
 		if scMap, ok := schema.(Numeric[uint]); ok {
-			bags, err = scMap.validate(originalData, key, schemaData[key], options)
+			bags, err = scMap.validate(originalData, schemaData[key], params)
 		}
 	case reflect.TypeOf(Numeric[uint32]{}):
 		if scMap, ok := schema.(Numeric[uint32]); ok {
-			bags, err = scMap.validate(originalData, key, schemaData[key], options)
+			bags, err = scMap.validate(originalData, schemaData[key], params)
 		}
 	case reflect.TypeOf(Numeric[uint64]{}):
 		if scMap, ok := schema.(Numeric[uint64]); ok {
-			bags, err = scMap.validate(originalData, key, schemaData[key], options)
+			bags, err = scMap.validate(originalData, schemaData[key], params)
 		}
 	case reflect.TypeOf(Numeric[float32]{}):
 		if scMap, ok := schema.(Numeric[float32]); ok {
-			bags, err = scMap.validate(originalData, key, schemaData[key], options)
+			bags, err = scMap.validate(originalData, schemaData[key], params)
 		}
 	case reflect.TypeOf(Numeric[float64]{}):
 		if scMap, ok := schema.(Numeric[float64]); ok {
-			bags, err = scMap.validate(originalData, key, schemaData[key], options)
+			bags, err = scMap.validate(originalData, schemaData[key], params)
 		}
 	}
 	return bags, err
@@ -113,8 +112,11 @@ func (s Numeric[NT]) process(params RuleParams) ([]string, error) {
 	// return nil
 }
 
-func (s Numeric[NT]) validate(jsonSource []byte, key string, value any, option Options) ([]string, error) {
+func (s Numeric[NT]) validate(jsonSource []byte, value any, params RuleParams) ([]string, error) {
 	var bags []string
+	key := params.Key
+	option := params.Option
+
 	err := s.assertRequired(key, value, &bags)
 
 	if err != nil {
@@ -174,7 +176,7 @@ func (s Numeric[NT]) validate(jsonSource []byte, key string, value any, option O
 		}
 
 		if s.Custom != nil {
-			if err := s.assertCustomValidation(s.Custom, jsonSource, parsedValue, &bags); option.AbortEarly && err != nil {
+			if err := s.assertCustomValidation(s.Custom, jsonSource, parsedValue, params, &bags); option.AbortEarly && err != nil {
 				return bags, err
 			}
 		}
@@ -388,8 +390,8 @@ func (s Numeric[NT]) assertNotIn(key string, value NT, bags *[]string) error {
 	return nil
 }
 
-func (s Numeric[NT]) assertCustomValidation(fc func(v NT, look Lookup) error, jsonSource []byte, value NT, bags *[]string) error {
-	err := fc(value, func(k string) gjson.Result {
+func (s Numeric[NT]) assertCustomValidation(fc func(v NT, params RuleParams, look Lookup) error, jsonSource []byte, value NT, params RuleParams, bags *[]string) error {
+	err := fc(value, params, func(k string) gjson.Result {
 		return gjson.GetBytes(jsonSource, k)
 	})
 	if err != nil {

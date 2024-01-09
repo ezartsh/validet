@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -43,10 +44,12 @@ func TestValidate(t *testing.T) {
 		"tags": [1],
 		"items": [
 			{
-				"titles": "ada1"
+				"title": "",
+				"age" : 12
 			},
 			{
-				"titles": "ada2"
+				"title": "",
+				"age" : 30
 			}
 		]
 	}`)
@@ -77,9 +80,9 @@ func TestValidate(t *testing.T) {
 	schema := NewSchema(
 		request,
 		map[string]Rule{
-			"name":        String{Required: true, Min: 10, Message: StringErrorMessage{Required: "name dibutuhkan"}},
-			"new_name":    Boolean{Required: true},
-			"custom_name": CustomString{Required: true},
+			"name":     String{Required: true, Min: 10, Message: StringErrorMessage{Required: "name dibutuhkan"}},
+			"new_name": Boolean{Required: true},
+			// "custom_name": CustomString{Required: true},
 			"email": String{RequiredUnless: &RequiredUnless{
 				FieldPath: "name",
 				Value:     "tono",
@@ -113,7 +116,15 @@ func TestValidate(t *testing.T) {
 			"items": SliceObject{
 				Required: true,
 				Item: SchemaObject{
-					"titles": Slice[string]{Required: true, Min: 2},
+					// "titles": Slice[string]{Required: true, Min: 2},
+					"title": String{Custom: func(v string, path PathKey, look Lookup) error {
+						parentData := look(strings.Join(path.Previous, "."))
+						if v == "" && parentData.Get("age").Int() > 12 {
+							return errors.New("title is required if age bigger than 12")
+						}
+						return nil
+					}},
+					"age": Numeric[float64]{Required: true},
 					"collections": SliceObject{
 						Required: true,
 						Item: SchemaObject{
@@ -129,5 +140,7 @@ func TestValidate(t *testing.T) {
 
 	bags, _ := schema.Validate()
 
-	fmt.Println(bags)
+	jsonString, err := json.MarshalIndent(bags.Errors, "", "    ")
+
+	fmt.Println(string(jsonString))
 }
