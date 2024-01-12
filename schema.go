@@ -18,20 +18,20 @@ type Rule interface {
 
 type SchemaRules = map[string]Rule
 
-type schemaContainer struct {
+type SchemaContainer struct {
 	Data    DataObject
 	Items   SchemaRules
 	Options Options
 }
 
-func NewSchema(d DataObject, items SchemaRules, options Options) schemaContainer {
-	return schemaContainer{
+func NewSchema(d DataObject, items SchemaRules, options Options) SchemaContainer {
+	return SchemaContainer{
 		Data:    d,
 		Items:   items,
 		Options: options,
 	}
 }
 
-func (s *schemaContainer) Validate() (ErrorBag, error) {
+func (s *SchemaContainer) Validate() (ErrorBag, error) {
 	return validate(s.Data, s.Items, s.Options)
 }
